@@ -1,0 +1,31 @@
+# ============================================================
+# Wish It — docker-compose  (local development)
+#
+# Usage:
+#   1. Start Supabase local stack first:  npx supabase start
+#   2. Then start the app:                docker-compose up
+#
+# Supabase local stack runs its own containers managed by the
+# Supabase CLI.  Get the local URL + keys from:
+#   npx supabase status
+# ============================================================
+
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      target: builder          # dev build (includes devDeps)
+    command: npm run dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    volumes:
+      - .:/app
+      - /app/node_modules       # preserve container's node_modules
+      - /app/.next              # preserve .next cache
+    restart: unless-stopped
