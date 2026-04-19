@@ -1,21 +1,24 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { updateProfile, changePassword, deleteAccount } from "@/lib/actions/auth"
+import { createClient } from "@/lib/supabase/client"
 import type { Profile } from "@/types"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import Toggle from "@/components/ui/Toggle"
 import Modal from "@/components/ui/Modal"
 import Button from "@/components/ui/Button"
+import { COUNTRIES } from "@/lib/countries"
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
   .map((m, i) => ({ label: m, value: String(i + 1).padStart(2, "0") }))
 const DAYS  = Array.from({ length: 31 }, (_, i) => ({ label: String(i + 1), value: String(i + 1).padStart(2, "0") }))
 const YEARS = Array.from({ length: 100 }, (_, i) => { const y = new Date().getFullYear() - i; return { label: String(y), value: String(y) } })
 const GENDERS = [
-  { label: "Male", value: "male" }, { label: "Female", value: "female" },
-  { label: "Non-binary", value: "non_binary" }, { label: "Prefer not to say", value: "prefer_not_to_say" },
+  { label: "Male", value: "male" },
+  { label: "Female", value: "female" },
+  { label: "Prefer not to say", value: "prefer_not_to_say" },
 ]
 const LANGUAGES = [
   { label: "English", value: "en" }, { label: "Norwegian", value: "no" },
@@ -37,6 +40,10 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
   const [dobMonth, setDobMonth] = useState(dob[1] ?? "")
   const [dobDay,   setDobDay]   = useState(dob[2] ?? "")
   const [dobYear,  setDobYear]  = useState(dob[0] ?? "")
+  const [avatarUrl, setAvatarUrl]         = useState(profile.avatar_url ?? "")
+  const [avatarPreview, setAvatarPreview] = useState(profile.avatar_url ?? "")
+  const [cropFile, setCropFile]           = useState<File | null>(null)
+  const [uploading, setUploading]         = useState(false)
 
   const [profileMsg,  setProfileMsg]  = useState("")
   const [passwordMsg, setPasswordMsg] = useState("")
@@ -44,11 +51,46 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [isPending, startTransition] = useTransition()
 
+  const initials = (
+    (profile.first_name?.[0] ?? profile.username?.[0] ?? "?").toUpperCase() +
+    (profile.last_name?.[0] ?? "").toUpperCase()
+  )
+
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // Reset input so re-selecting same file triggers onChange
+    e.target.value = ""
+    setCropFile(file)
+  }
+
+  async function handleCropApply(blob: Blob) {
+    setCropFile(null)
+    setUploading(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const path = `${user.id}/avatar.jpg`
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, blob, { upsert: true, contentType: "image/jpeg" })
+      if (uploadError) { setProfileMsg("Error: " + uploadError.message); return }
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path)
+      // Bust browser cache by appending timestamp
+      setAvatarUrl(publicUrl + "?t=" + Date.now())
+      setAvatarPreview(URL.createObjectURL(blob))
+    } finally {
+      setUploading(false)
+    }
+  }
+
   function handleProfileSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     if (dobMonth && dobDay && dobYear) fd.set("date_of_birth", `${dobYear}-${dobMonth}-${dobDay}`)
     fd.set("is_private", String(isPrivate))
+    fd.set("avatar_url", avatarUrl)
     startTransition(async () => {
       const result = await updateProfile(fd)
       setProfileMsg(result?.error ? `Error: ${result.error}` : "Profile saved.")
@@ -75,17 +117,44 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
 
       {/* Avatar + name */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
-        <div style={{
-          width: 64, height: 64, borderRadius: "50%", background: "#38A3C7",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "white", fontWeight: 700, fontSize: 22,
-        }}>
-          {(profile.first_name?.[0] ?? profile.username?.[0] ?? "?").toUpperCase()}
-          {(profile.last_name?.[0] ?? "").toUpperCase()}
+        <label
+          htmlFor="avatar-upload"
+          title={uploading ? "Uploading…" : "Click to change photo"}
+          style={{ cursor: uploading ? "wait" : "pointer", flexShrink: 0, position: "relative" }}
+        >
+          <div style={{
+            width: 72, height: 72, borderRadius: "50%", background: "#38A3C7",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "white", fontWeight: 700, fontSize: 24, overflow: "hidden",
+            border: "3px solid white", boxShadow: "0 0 0 2px #38A3C7",
+          }}>
+            {avatarPreview
+              ? <img src={avatarPreview} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : initials}
+          </div>
+          <div style={{
+            position: "absolute", bottom: 0, right: 0,
+            width: 22, height: 22, borderRadius: "50%",
+            background: "#0F172A", border: "2px solid white",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 11, color: "white",
+          }}>
+            {uploading ? "…" : "✎"}
+          </div>
+        </label>
+        <input
+          id="avatar-upload"
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleAvatarChange}
+        />
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: "0 0 2px" }}>
+            {profile.full_name ?? profile.username}
+          </h1>
+          <span style={{ fontSize: 13, color: "#94A3B8" }}>@{profile.username}</span>
         </div>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
-          {profile.full_name ?? profile.username}
-        </h1>
       </div>
 
       <form onSubmit={handleProfileSubmit} style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -116,11 +185,30 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
           <Input label="Phone number" name="phone" type="tel" defaultValue={profile.phone ?? ""} placeholder="71 111 222" />
         </div>
 
+        {/* Bio */}
+        <div style={{ marginTop: 16 }}>
+          <label style={{ fontSize: 14, fontWeight: 500, color: "#334155", display: "block", marginBottom: 8 }}>Bio</label>
+          <textarea
+            name="bio"
+            defaultValue={profile.bio ?? ""}
+            placeholder="Tell people a little about yourself…"
+            rows={3}
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: 8,
+              border: "1px solid #E2E8F0", fontSize: 13, color: "#0F172A",
+              resize: "vertical", outline: "none", fontFamily: "inherit",
+              boxSizing: "border-box",
+            }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = "#38A3C7")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = "#E2E8F0")}
+          />
+        </div>
+
         {/* Location */}
         {section("Location")}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <Input label="Zip Code"        name="zip_code" defaultValue={profile.zip_code ?? ""} placeholder="Zip Code" />
-          <Input label="Country / Region" name="country"  defaultValue={profile.country  ?? ""} placeholder="Country"  />
+          <Input  label="Zip Code"        name="zip_code" defaultValue={profile.zip_code ?? ""} placeholder="Zip Code" />
+          <Select label="Country / Region" name="country"  options={COUNTRIES} defaultValue={profile.country ?? ""} placeholder="Select country" />
         </div>
 
         {/* Privacy */}
@@ -169,6 +257,15 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
         DELETE MY PROFILE
       </button>
 
+      {/* Avatar crop modal */}
+      {cropFile && (
+        <AvatarCropModal
+          file={cropFile}
+          onApply={handleCropApply}
+          onCancel={() => setCropFile(null)}
+        />
+      )}
+
       {/* Change password modal */}
       <Modal open={showPasswordModal} onClose={() => setShowPasswordModal(false)} title="Change Password">
         <form onSubmit={handlePasswordSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -201,5 +298,134 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
       </Modal>
 
     </main>
+  )
+}
+
+// ── Avatar crop modal ────────────────────────────────────────────
+function AvatarCropModal({ file, onApply, onCancel }: {
+  file: File
+  onApply: (blob: Blob) => void
+  onCancel: () => void
+}) {
+  const PREVIEW = 240
+  const OUTPUT  = 512
+  const imgRef  = useRef<HTMLImageElement>(null)
+  const [src]   = useState(() => URL.createObjectURL(file))
+  const [scale, setScale]   = useState(1)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const dragging = useRef(false)
+  const dragStart = useRef({ mx: 0, my: 0, ox: 0, oy: 0 })
+
+  function onMouseDown(e: React.MouseEvent) {
+    dragging.current = true
+    dragStart.current = { mx: e.clientX, my: e.clientY, ox: offset.x, oy: offset.y }
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    if (!dragging.current) return
+    setOffset({
+      x: dragStart.current.ox + (e.clientX - dragStart.current.mx),
+      y: dragStart.current.oy + (e.clientY - dragStart.current.my),
+    })
+  }
+  function onMouseUp() { dragging.current = false }
+
+  function handleApply() {
+    const img = imgRef.current
+    if (!img) return
+    const canvas = document.createElement("canvas")
+    canvas.width = OUTPUT
+    canvas.height = OUTPUT
+    const ctx = canvas.getContext("2d")!
+
+    // Reproduce the CSS transform on canvas:
+    // objectFit:cover baseline: scale image so shorter side = PREVIEW
+    const baseScale = Math.max(PREVIEW / img.naturalWidth, PREVIEW / img.naturalHeight)
+    const totalScale = baseScale * scale
+    const drawW = img.naturalWidth  * totalScale * (OUTPUT / PREVIEW)
+    const drawH = img.naturalHeight * totalScale * (OUTPUT / PREVIEW)
+    const drawX = (OUTPUT - drawW) / 2 + offset.x * (OUTPUT / PREVIEW)
+    const drawY = (OUTPUT - drawH) / 2 + offset.y * (OUTPUT / PREVIEW)
+
+    ctx.save()
+    ctx.arc(OUTPUT / 2, OUTPUT / 2, OUTPUT / 2, 0, Math.PI * 2)
+    ctx.clip()
+    ctx.drawImage(img, drawX, drawY, drawW, drawH)
+    ctx.restore()
+
+    canvas.toBlob((blob) => { if (blob) onApply(blob) }, "image/jpeg", 0.92)
+  }
+
+  return (
+    <>
+      <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 600, backdropFilter: "blur(4px)" }} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+        zIndex: 601, background: "white", borderRadius: 20, padding: "28px 28px 24px",
+        width: "calc(100% - 32px)", maxWidth: 360,
+        boxShadow: "0 24px 64px rgba(0,0,0,0.25)",
+      }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 6px" }}>Adjust photo</h2>
+        <p style={{ fontSize: 13, color: "#94A3B8", margin: "0 0 20px" }}>Drag to reposition · Scroll or slide to zoom</p>
+
+        {/* Circle preview */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+          <div
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseUp}
+            onWheel={(e) => setScale(s => Math.min(4, Math.max(0.5, s - e.deltaY * 0.001)))}
+            style={{
+              width: PREVIEW, height: PREVIEW, borderRadius: "50%",
+              overflow: "hidden", cursor: "grab",
+              border: "3px solid #38A3C7",
+              boxShadow: "0 0 0 4px #E0F4FA",
+              userSelect: "none", position: "relative",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              ref={imgRef}
+              src={src}
+              alt=""
+              draggable={false}
+              style={{
+                position: "absolute",
+                width: "100%", height: "100%",
+                objectFit: "cover",
+                transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+                transformOrigin: "center",
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Zoom slider */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ fontSize: 12, color: "#64748B", display: "block", marginBottom: 6 }}>Zoom</label>
+          <input
+            type="range" min={0.5} max={4} step={0.02} value={scale}
+            onChange={(e) => setScale(parseFloat(e.target.value))}
+            style={{ width: "100%", accentColor: "#38A3C7" }}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{ flex: 1, padding: "12px", borderRadius: 10, border: "1px solid #E2E8F0", background: "white", fontWeight: 600, fontSize: 13, cursor: "pointer", color: "#334155" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleApply}
+            style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: "#38A3C7", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+          >
+            Apply Photo
+          </button>
+        </div>
+      </div>
+    </>
   )
 }

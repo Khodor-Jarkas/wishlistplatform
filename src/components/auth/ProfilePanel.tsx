@@ -3,12 +3,14 @@
 import Link from "next/link"
 import { signOut } from "@/lib/actions/auth"
 import { getInitials } from "@/lib/utils"
+import Drawer from "@/components/ui/Drawer"
 import type { Profile } from "@/types"
 
 interface Props {
+  open: boolean
+  onClose: () => void
   profile: Profile
   email: string
-  onClose: () => void
 }
 
 const quickLinks = [
@@ -18,132 +20,105 @@ const quickLinks = [
   { icon: "👤", label: "Account",      href: "/profile"      },
 ]
 
-const listLinks = [
-  { icon: "❓", label: "Help", href: "/help" },
-]
-
-export default function ProfilePanel({ profile, email, onClose }: Props) {
+export default function ProfilePanel({ open, onClose, profile, email }: Props) {
   const initials = getInitials(profile)
-
   const displayName = profile.first_name
     ? `${profile.first_name} ${profile.last_name ?? ""}`.trim()
     : profile.full_name ?? profile.username ?? "User"
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(0,0,0,0.2)" }}
-      />
-
-      {/* Panel */}
-      <div
-        style={{
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          zIndex: 95,
-          background: "white",
-          borderRadius: 20,
-          width: "100%",
-          maxWidth: 400,
-          padding: "24px 20px",
-          boxShadow: "0 8px 40px rgba(0,0,0,0.15)",
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Profile</h2>
-          <button
-            onClick={onClose}
-            style={{ background: "#F1F5F9", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", fontSize: 14 }}
-          >
-            ✕
-          </button>
-        </div>
+    <Drawer open={open} onClose={onClose} title="Profile">
+      <div style={{ padding: "20px" }}>
 
         {/* User card */}
-        <div
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            background: "#F8FAFC", borderRadius: 12, padding: "14px 16px", marginBottom: 16,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: "50%", background: "#38A3C7",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "white", fontWeight: 700, fontSize: 16,
-            }}>
-              {initials}
-            </div>
-            <div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>{displayName}</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#64748B" }}>{email}</p>
-            </div>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 14,
+          background: "linear-gradient(135deg, #1E8FAD, #38A3C7)",
+          borderRadius: 16, padding: "18px 20px", marginBottom: 20,
+          color: "white",
+        }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: "50%",
+            background: "rgba(255,255,255,0.25)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontWeight: 700, fontSize: 20, flexShrink: 0,
+            boxShadow: "0 0 0 3px rgba(255,255,255,0.3)",
+            overflow: "hidden",
+          }}>
+            {profile.avatar_url
+              ? <img src={profile.avatar_url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : initials}
           </div>
-          <button style={{ background: "none", border: "none", fontSize: 12, color: "#38A3C7", cursor: "pointer", fontWeight: 500 }}>
-            Share
-          </button>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {displayName}
+            </p>
+            <p style={{ margin: 0, fontSize: 12, opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {email}
+            </p>
+          </div>
         </div>
 
         {/* Quick links grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
           {quickLinks.map((item) => (
             <Link
               key={item.label}
               href={item.href}
               onClick={onClose}
               style={{
-                display: "flex", alignItems: "center", gap: 10,
-                background: "#F8FAFC", borderRadius: 12, padding: "14px 16px",
-                textDecoration: "none", color: "#0F172A", fontSize: 14, fontWeight: 500,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                gap: 8, background: "#F8FAFC", borderRadius: 14, padding: "18px 12px",
+                textDecoration: "none", color: "#0F172A", fontSize: 13, fontWeight: 600,
+                border: "1px solid #F1F5F9",
+                transition: "background 0.15s",
               }}
+              onMouseEnter={e => e.currentTarget.style.background = "#F1F5F9"}
+              onMouseLeave={e => e.currentTarget.style.background = "#F8FAFC"}
             >
-              <span style={{ fontSize: 18 }}>{item.icon}</span>
+              <span style={{ fontSize: 24 }}>{item.icon}</span>
               {item.label}
             </Link>
           ))}
         </div>
 
-        {/* List links */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-          {listLinks.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              onClick={onClose}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                background: "#F8FAFC", borderRadius: 12, padding: "14px 16px",
-                textDecoration: "none", color: "#0F172A", fontSize: 14, fontWeight: 500,
-              }}
-            >
-              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 18 }}>{item.icon}</span>
-                {item.label}
-              </span>
-              <span style={{ color: "#94A3B8" }}>›</span>
-            </Link>
-          ))}
-        </div>
+        {/* Divider */}
+        <div style={{ height: 1, background: "#F1F5F9", marginBottom: 16 }} />
+
+        {/* Help link */}
+        <Link
+          href="/help"
+          onClick={onClose}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            background: "#F8FAFC", borderRadius: 12, padding: "14px 16px",
+            textDecoration: "none", color: "#0F172A", fontSize: 14, fontWeight: 500,
+            marginBottom: 12, border: "1px solid #F1F5F9",
+          }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 18 }}>❓</span> Help & Support
+          </span>
+          <span style={{ color: "#94A3B8" }}>›</span>
+        </Link>
 
         {/* Log out */}
         <form action={signOut}>
           <button
             type="submit"
             style={{
-              width: "100%", padding: "14px", background: "#0F172A", color: "white",
-              border: "none", borderRadius: 12, fontWeight: 700, fontSize: 14,
+              width: "100%", padding: "14px",
+              background: "#0F172A", color: "white",
+              border: "none", borderRadius: 12,
+              fontWeight: 700, fontSize: 14,
               letterSpacing: "0.05em", cursor: "pointer",
+              marginTop: 4,
             }}
           >
             LOG OUT
           </button>
         </form>
       </div>
-    </>
+    </Drawer>
   )
 }

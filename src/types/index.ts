@@ -46,6 +46,9 @@ export interface Wishlist {
   cover_image_url: string | null
   occasion: WishlistOccasion | null
   event_date: string | null
+  is_for_others: boolean
+  beneficiary_name: string | null
+  color: string | null
   created_at: string
   updated_at: string
   // Relations (joined)
@@ -79,11 +82,14 @@ export interface Wish {
   priority: WishPriority
   quantity: number
   is_reserved: boolean
+  is_received: boolean
   created_at: string
   updated_at: string
   // Relations (joined)
   reservation?: Reservation | null
   reservations?: Reservation[]
+  // Server-computed: true when the viewing user has reserved this wish
+  isReservedByMe?: boolean
 }
 
 // ---- Friends ----
@@ -103,10 +109,13 @@ export interface Friendship {
 
 // ---- Reservations ----
 
+export type ReservationStatus = "reserved" | "bought"
+
 export interface Reservation {
   id: string
   wish_id: string
   reserved_by: string | null
+  status: ReservationStatus
   note: string | null
   reserved_at: string
   // Relations (joined)
@@ -115,7 +124,7 @@ export interface Reservation {
 
 // ---- Notifications ----
 
-export type NotificationType = "friend_request" | "friend_accepted" | "wishlist_followed"
+export type NotificationType = "friend_request" | "friend_accepted" | "wishlist_followed" | "wish_reserved"
 
 export interface Notification {
   id: string
@@ -123,6 +132,7 @@ export interface Notification {
   type: NotificationType
   actor_id: string | null
   target_id: string | null
+  meta: Record<string, unknown> | null
   is_read: boolean
   created_at: string
   // Relations (joined)

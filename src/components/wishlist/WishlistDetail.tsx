@@ -146,6 +146,18 @@ export default function WishlistDetail({
             )}
           </div>
 
+          {/* On behalf badge */}
+          {wishlist.is_for_others && wishlist.beneficiary_name && (
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: "#FDF4FF", border: "1px solid #E9D5FF",
+              borderRadius: 20, padding: "4px 12px", marginBottom: 14,
+              fontSize: 12, fontWeight: 600, color: "#7C3AED",
+            }}>
+              🎁 On behalf of {wishlist.beneficiary_name}
+            </div>
+          )}
+
           {/* ── Owner + followers row ── */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
             {/* Left: avatar + name */}
@@ -245,23 +257,57 @@ export default function WishlistDetail({
               </p>
             </div>
           ) : (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-              gap: 20,
-            }}>
-              {wishes.map((wish) => (
-                <WishCard
-                  key={wish.id}
-                  wish={wish}
-                  wishlistId={wishlist.id}
-                  isOwner={isOwner}
-                  currentUserId={currentUserId}
-                  userWishlists={userWishlists}
-                  onEditRequest={(w) => setEditingWish(w)}
-                />
-              ))}
-            </div>
+            <>
+              {/* Active wishes */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                gap: 20,
+              }}>
+                {wishes.filter(w => !w.is_received).map((wish) => (
+                  <WishCard
+                    key={wish.id}
+                    wish={wish}
+                    wishlistId={wishlist.id}
+                    isOwner={isOwner}
+                    currentUserId={currentUserId}
+                    userWishlists={userWishlists}
+                    onEditRequest={(w) => setEditingWish(w)}
+                  />
+                ))}
+              </div>
+
+              {/* Received wishes — owner only */}
+              {isOwner && wishes.some(w => w.is_received) && (
+                <div style={{ marginTop: 48 }}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, color: "#94A3B8",
+                    textTransform: "uppercase", letterSpacing: "0.1em",
+                    marginBottom: 16,
+                  }}>
+                    Received
+                  </div>
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                    gap: 20,
+                    opacity: 0.5,
+                  }}>
+                    {wishes.filter(w => w.is_received).map((wish) => (
+                      <WishCard
+                        key={wish.id}
+                        wish={wish}
+                        wishlistId={wishlist.id}
+                        isOwner={isOwner}
+                        currentUserId={currentUserId}
+                        userWishlists={userWishlists}
+                        onEditRequest={(w) => setEditingWish(w)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Container>

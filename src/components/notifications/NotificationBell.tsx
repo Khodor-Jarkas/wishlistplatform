@@ -1,34 +1,45 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { acceptFriendRequest, declineFriendRequest } from "@/lib/actions/friends"
 import { markAllNotificationsRead } from "@/lib/actions/notifications"
+import Drawer from "@/components/ui/Drawer"
 import type { Notification } from "@/types"
 
-export default function NotificationBell() {
-  const [open, setOpen]                 = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [unreadCount, setUnreadCount]   = useState(0)
-  const [loading, setLoading]           = useState(false)
-  const [isPending, start]              = useTransition()
-  const dropdownRef                     = useRef<HTMLDivElement>(null)
+interface Props {
+  open: boolean
+  onOpen: () => void
+  onClose: () => void
+}
 
-  // Fetch unread count on mount
+export default function NotificationBell({ open, onOpen, onClose }: Props) {
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount]     = useState(0)
+  const [loading, setLoading]             = useState(false)
+  const [isPending, start]                = useTransition()
+
+  // Fetch unread count on mount + subscribe to real-time inserts
   useEffect(() => {
     fetchUnreadCount()
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel("notifications-live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, () => {
+        setUnreadCount((c) => c + 1)
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
-  // Close on outside click
+  // Fetch + mark read when opened
   useEffect(() => {
     if (!open) return
-    function handle(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handle)
-    return () => document.removeEventListener("mousedown", handle)
+    fetchNotifications()
+    setUnreadCount(0)
+    start(() => void markAllNotificationsRead())
   }, [open])
 
   async function fetchUnreadCount() {
@@ -47,40 +58,30 @@ export default function NotificationBell() {
       .from("notifications")
       .select("*, actor:actor_id(id, username, first_name, last_name, avatar_url)")
       .order("created_at", { ascending: false })
-      .limit(25)
+      .limit(30)
     setNotifications((data as unknown as Notification[]) ?? [])
     setLoading(false)
-  }
-
-  function handleOpen() {
-    setOpen(true)
-    fetchNotifications()
-    // Optimistically clear badge
-    setUnreadCount(0)
-    // Mark all as read server-side (fire-and-forget)
-    start(() => void markAllNotificationsRead())
   }
 
   function handleFriendAction(notifId: string, type: "accept" | "decline", friendshipId: string) {
     start(async () => {
       if (type === "accept") await acceptFriendRequest(friendshipId)
       else await declineFriendRequest(friendshipId)
-      // Remove handled notification from list
-      setNotifications((prev) => prev.map((n) =>
-        n.id === notifId ? { ...n, type: "friend_accepted" as any } : n
-      ))
+      setNotifications((prev) =>
+        prev.map((n) => n.id === notifId ? { ...n, type: "friend_accepted" as const } : n)
+      )
     })
   }
 
   return (
-    <div ref={dropdownRef} style={{ position: "relative" }}>
+    <>
       {/* Bell button */}
       <button
-        onClick={handleOpen}
+        onClick={onOpen}
         style={{
           background: "none", border: "none", cursor: "pointer",
           color: "#64748B", display: "flex", alignItems: "center",
-          position: "relative",
+          position: "relative", padding: 4,
         }}
         title="Notifications"
       >
@@ -90,70 +91,70 @@ export default function NotificationBell() {
         </svg>
         {unreadCount > 0 && (
           <span style={{
-            position: "absolute", top: -4, right: -4,
+            position: "absolute", top: 0, right: 0,
             minWidth: 16, height: 16, borderRadius: 8,
             background: "#EF4444", color: "white",
             fontSize: 10, fontWeight: 700, lineHeight: "16px",
             textAlign: "center", padding: "0 3px",
+            boxShadow: "0 0 0 2px white",
           }}>
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Dropdown */}
-      {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 12px)", right: 0,
-          background: "white", borderRadius: 14,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)",
-          border: "1px solid #F1F5F9",
-          width: 340, maxHeight: 460, overflowY: "auto",
-          zIndex: 200,
-        }}>
-          {/* Header */}
-          <div style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            padding: "14px 16px 10px",
-            borderBottom: "1px solid #F1F5F9",
-          }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>Notifications</span>
-            <button
-              onClick={() => setOpen(false)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "#94A3B8", fontSize: 18, lineHeight: 1 }}
-            >
-              ×
-            </button>
+      {/* Drawer */}
+      <Drawer open={open} onClose={onClose} title="Notifications">
+        {loading ? (
+          <div style={{ padding: "48px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
+            Loading…
           </div>
-
-          {loading ? (
-            <div style={{ padding: "32px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
-              Loading…
-            </div>
-          ) : notifications.length === 0 ? (
-            <div style={{ padding: "40px 16px", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
-              No notifications yet
-            </div>
-          ) : (
-            notifications.map((n) => (
+        ) : notifications.length === 0 ? (
+          <div style={{ padding: "64px 20px", textAlign: "center" }}>
+            <div style={{ fontSize: 44, marginBottom: 14 }}>🔔</div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", margin: "0 0 6px" }}>All caught up</p>
+            <p style={{ fontSize: 13, color: "#94A3B8", margin: 0 }}>No notifications yet</p>
+          </div>
+        ) : (
+          <div>
+            {notifications.map((n) => (
               <NotifRow
                 key={n.id}
                 notification={n}
                 isPending={isPending}
                 onFriendAction={handleFriendAction}
               />
-            ))
-          )}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </Drawer>
+    </>
+  )
+}
+
+// ── Notification icons ───────────────────────────────────────
+function NotifIcon({ type }: { type: string }) {
+  const configs: Record<string, { bg: string; emoji: string }> = {
+    friend_request:    { bg: "#E0F4FA", emoji: "👤" },
+    friend_accepted:   { bg: "#DCFCE7", emoji: "🤝" },
+    wishlist_followed: { bg: "#F3E8FF", emoji: "⭐" },
+    wish_reserved:     { bg: "#FEF3C7", emoji: "🎁" },
+  }
+  const cfg = configs[type] ?? { bg: "#F1F5F9", emoji: "🔔" }
+  return (
+    <div style={{
+      width: 40, height: 40, borderRadius: 12,
+      background: cfg.bg, flexShrink: 0,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: 19,
+    }}>
+      {cfg.emoji}
     </div>
   )
 }
 
 // ── Single notification row ──────────────────────────────────
-function NotifRow({
-  notification: n, isPending, onFriendAction,
-}: {
+function NotifRow({ notification: n, isPending, onFriendAction }: {
   notification: Notification
   isPending: boolean
   onFriendAction: (notifId: string, type: "accept" | "decline", friendshipId: string) => void
@@ -162,6 +163,7 @@ function NotifRow({
   const actorName = actor
     ? (actor.first_name ? `${actor.first_name} ${actor.last_name ?? ""}`.trim() : actor.username) ?? "Someone"
     : "Someone"
+  const wishTitle = (n.meta?.wish_title as string | undefined) ?? "a wish"
 
   function renderBody() {
     switch (n.type) {
@@ -170,30 +172,19 @@ function NotifRow({
           <>
             <p style={textStyle}><strong>{actorName}</strong> sent you a friend request</p>
             {n.target_id && (
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <SmallBtn
-                  label="Accept"
-                  primary
-                  disabled={isPending}
-                  onClick={() => onFriendAction(n.id, "accept", n.target_id!)}
-                />
-                <SmallBtn
-                  label="Decline"
-                  disabled={isPending}
-                  onClick={() => onFriendAction(n.id, "decline", n.target_id!)}
-                />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <SmallBtn label="Accept"  primary disabled={isPending} onClick={() => onFriendAction(n.id, "accept",  n.target_id!)} />
+                <SmallBtn label="Decline"         disabled={isPending} onClick={() => onFriendAction(n.id, "decline", n.target_id!)} />
               </div>
             )}
           </>
         )
       case "friend_accepted":
-        return (
-          <p style={textStyle}><strong>{actorName}</strong> accepted your friend request</p>
-        )
+        return <p style={textStyle}><strong>{actorName}</strong> accepted your friend request 🎉</p>
       case "wishlist_followed":
-        return (
-          <p style={textStyle}><strong>{actorName}</strong> followed one of your wishlists</p>
-        )
+        return <p style={textStyle}><strong>{actorName}</strong> started following one of your wishlists</p>
+      case "wish_reserved":
+        return <p style={textStyle}>Someone reserved <strong>{wishTitle}</strong> on your wishlist 🎁</p>
       default:
         return null
     }
@@ -201,58 +192,41 @@ function NotifRow({
 
   return (
     <div style={{
-      display: "flex", gap: 12, padding: "12px 16px",
+      display: "flex", gap: 14, padding: "16px 20px",
       borderBottom: "1px solid #F8FAFC",
       background: n.is_read ? "transparent" : "#F0F9FF",
     }}>
-      {/* Actor avatar */}
-      <div style={{
-        width: 36, height: 36, borderRadius: "50%",
-        background: "#38A3C7", flexShrink: 0, overflow: "hidden",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "white", fontWeight: 700, fontSize: 13,
-      }}>
-        {actor?.avatar_url
-          ? <img src={actor.avatar_url} alt={actorName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : (actorName[0] ?? "?")}
-      </div>
-
+      <NotifIcon type={n.type} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {renderBody()}
-        <p style={{ margin: "4px 0 0", fontSize: 11, color: "#94A3B8" }}>
-          {timeAgo(n.created_at)}
-        </p>
+        <p style={{ margin: "5px 0 0", fontSize: 11, color: "#94A3B8" }}>{timeAgo(n.created_at)}</p>
       </div>
+      {!n.is_read && (
+        <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#38A3C7", flexShrink: 0, marginTop: 6 }} />
+      )}
     </div>
   )
 }
 
-function SmallBtn({
-  label, onClick, primary = false, disabled,
-}: { label: string; onClick: () => void; primary?: boolean; disabled?: boolean }) {
+function SmallBtn({ label, onClick, primary = false, disabled }: {
+  label: string; onClick: () => void; primary?: boolean; disabled?: boolean
+}) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        fontSize: 11, fontWeight: 700, padding: "5px 12px",
-        borderRadius: 6, border: "1.5px solid",
-        cursor: "pointer",
-        background:  primary ? "#0F172A" : "transparent",
-        color:       primary ? "white"   : "#334155",
-        borderColor: primary ? "#0F172A" : "#E2E8F0",
-        opacity: disabled ? 0.6 : 1,
-        letterSpacing: "0.03em",
-      }}
-    >
+    <button onClick={onClick} disabled={disabled} style={{
+      fontSize: 12, fontWeight: 600, padding: "6px 14px",
+      borderRadius: 8, border: "1.5px solid",
+      cursor: "pointer",
+      background:  primary ? "#0F172A" : "transparent",
+      color:       primary ? "white"   : "#334155",
+      borderColor: primary ? "#0F172A" : "#E2E8F0",
+      opacity: disabled ? 0.6 : 1,
+    }}>
       {label}
     </button>
   )
 }
 
-const textStyle: React.CSSProperties = {
-  margin: 0, fontSize: 13, color: "#0F172A", lineHeight: 1.45,
-}
+const textStyle: React.CSSProperties = { margin: 0, fontSize: 13, color: "#0F172A", lineHeight: 1.5 }
 
 function timeAgo(dateStr: string): string {
   const diff  = Date.now() - new Date(dateStr).getTime()

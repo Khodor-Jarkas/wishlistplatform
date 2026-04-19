@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { updateWishlist } from "@/lib/actions/wishlists"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
+import { WISHLIST_COLOR_PRESETS } from "./WishlistCard"
 import type { Wishlist } from "@/types"
 
 const OCCASIONS = [
@@ -39,6 +40,7 @@ export default function EditWishlistModal({ wishlist, onClose }: Props) {
   const [selectedVisibility, setSelectedVisibility] = useState(wishlist.visibility)
   const [coverUrl, setCoverUrl] = useState(wishlist.cover_image_url ?? "")
   const [coverPreview, setCoverPreview] = useState(wishlist.cover_image_url ?? "")
+  const [selectedColor, setSelectedColor] = useState((wishlist as any).color ?? "blue")
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState("")
   const [isPending, start] = useTransition()
@@ -75,6 +77,7 @@ export default function EditWishlistModal({ wishlist, onClose }: Props) {
     fd.set("type", selectedType)
     fd.set("visibility", selectedVisibility)
     if (coverUrl) fd.set("cover_image_url", coverUrl)
+    fd.set("color", selectedColor)
 
     start(async () => {
       const res = await updateWishlist(fd)
@@ -183,6 +186,35 @@ export default function EditWishlistModal({ wishlist, onClose }: Props) {
             />
           </div>
 
+          {/* Color picker — only when no cover image */}
+          {!coverPreview && (
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: "#334155", display: "block", marginBottom: 10 }}>
+                Card Color
+              </label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {Object.entries(WISHLIST_COLOR_PRESETS).map(([key, gradient]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSelectedColor(key)}
+                    style={{
+                      width: 30, height: 30, borderRadius: "50%",
+                      background: gradient,
+                      border: selectedColor === key ? "3px solid #0F172A" : "3px solid transparent",
+                      outline: selectedColor === key ? "2px solid white" : "none",
+                      outlineOffset: selectedColor === key ? "-5px" : "0",
+                      cursor: "pointer", padding: 0,
+                      transition: "transform 0.1s",
+                      transform: selectedColor === key ? "scale(1.18)" : "scale(1)",
+                    }}
+                    title={key.charAt(0).toUpperCase() + key.slice(1)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Title */}
           <div style={{ marginBottom: 18 }}>
             <Input
@@ -223,6 +255,27 @@ export default function EditWishlistModal({ wishlist, onClose }: Props) {
               ))}
             </div>
           </div>
+
+          {/* Beneficiary name — only for on_behalf */}
+          {selectedType === "on_behalf" && (
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: "#334155", display: "block", marginBottom: 6 }}>
+                Who is this for?
+              </label>
+              <input
+                name="beneficiary_name"
+                defaultValue={(wishlist as any).beneficiary_name ?? ""}
+                placeholder="e.g. Emma, my daughter"
+                style={{
+                  width: "100%", padding: "10px 12px", borderRadius: 8,
+                  border: "1px solid #E2E8F0", fontSize: 13, color: "#0F172A",
+                  outline: "none", boxSizing: "border-box",
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "#38A3C7")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "#E2E8F0")}
+              />
+            </div>
+          )}
 
           {/* Description */}
           <div style={{ marginBottom: 16 }}>

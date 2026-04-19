@@ -11,6 +11,7 @@ export interface TrendingWishlist {
   title: string
   description: string | null
   cover_image_url: string | null
+  color: string | null
   occasion: string | null
   follower_count: number
   wish_count: number
@@ -28,7 +29,7 @@ export async function getTrendingWishlists(): Promise<TrendingWishlist[]> {
   const { data } = await supabase
     .from("wishlists")
     .select(`
-      id, title, description, cover_image_url, occasion,
+      id, title, description, cover_image_url, color, occasion,
       profile:user_id(username, first_name, last_name, avatar_url),
       wishlist_followers(count),
       wishes(count)
@@ -42,6 +43,7 @@ export async function getTrendingWishlists(): Promise<TrendingWishlist[]> {
     title: w.title,
     description: w.description,
     cover_image_url: w.cover_image_url,
+    color: w.color ?? null,
     occasion: w.occasion,
     profile: w.profile ?? null,
     follower_count: w.wishlist_followers?.[0]?.count ?? 0,

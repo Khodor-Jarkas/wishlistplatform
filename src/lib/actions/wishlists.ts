@@ -30,7 +30,9 @@ export async function createWishlist(formData: FormData) {
       description: (formData.get("description") as string) || null,
       occasion: (formData.get("occasion") as string) || null,
       event_date: (formData.get("event_date") as string) || null,
-      cover_image_url: (formData.get("cover_image_url") as string) || null,
+      cover_image_url:   (formData.get("cover_image_url") as string) || null,
+      beneficiary_name:  (formData.get("beneficiary_name") as string) || null,
+      color:             (formData.get("color") as string) || null,
     })
     .select("id")
     .single()
@@ -70,8 +72,10 @@ export async function updateWishlist(formData: FormData) {
       description: (formData.get("description") as string) || null,
       occasion: (formData.get("occasion") as string) || null,
       event_date: (formData.get("event_date") as string) || null,
-      cover_image_url: (formData.get("cover_image_url") as string) || null,
-      updated_at: new Date().toISOString(),
+      cover_image_url:  (formData.get("cover_image_url") as string) || null,
+      beneficiary_name: (formData.get("beneficiary_name") as string) || null,
+      color:            (formData.get("color") as string) || null,
+      updated_at:       new Date().toISOString(),
     })
     .eq("id", id)
     .eq("user_id", user.id) // RLS double-check

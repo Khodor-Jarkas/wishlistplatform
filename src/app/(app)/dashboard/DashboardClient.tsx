@@ -17,6 +17,13 @@ interface Props {
   totalWishes: number
 }
 
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return "Good morning"
+  if (h < 18) return "Good afternoon"
+  return "Good evening"
+}
+
 export default function DashboardClient({
   wishlists,
   followedLists,
@@ -27,51 +34,124 @@ export default function DashboardClient({
   totalWishes,
 }: Props) {
   const [showModal, setShowModal] = useState(false)
+  const firstName = displayName.split(" ")[0]
 
   return (
-    <main style={{ minHeight: "100vh", background: "#F8FAFC", paddingBottom: 60 }}>
-      <Container>
-        <div style={{ paddingTop: 48 }}>
+    <main style={{ minHeight: "100vh", background: "#F8FAFC", paddingBottom: 80 }}>
 
-          {/* Profile header */}
-          <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: 48 }}>
-            <div
-              style={{
-                width: 88, height: 88, borderRadius: "50%", background: "#38A3C7",
+      {/* ── Profile banner ── */}
+      <div style={{
+        background: "linear-gradient(135deg, #1E8FAD 0%, #38A3C7 60%, #4DBBD6 100%)",
+        paddingBottom: 64,
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        {/* bg circles */}
+        <div style={{ position: "absolute", top: -60, right: -60, width: 300, height: 300, borderRadius: "50%", background: "rgba(255,255,255,0.06)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: -40, left: -40, width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
+
+        <Container>
+          <div style={{ paddingTop: 48, color: "white" }}>
+            <p style={{ fontSize: 14, opacity: 0.8, margin: "0 0 4px" }}>
+              {greeting()},
+            </p>
+            <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>
+              {firstName} 👋
+            </h1>
+          </div>
+        </Container>
+      </div>
+
+      <Container>
+        <div style={{ position: "relative", marginTop: -48 }}>
+
+          {/* ── Profile card ── */}
+          <div style={{
+            background: "white",
+            borderRadius: 20,
+            padding: "24px 28px",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
+            marginBottom: 32,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 24,
+            flexWrap: "wrap",
+          }}>
+            {/* Avatar + name */}
+            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+              <div style={{
+                width: 72, height: 72, borderRadius: "50%",
+                background: "#38A3C7", position: "relative",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                color: "white", fontWeight: 700, fontSize: 28, flexShrink: 0, overflow: "hidden",
-              }}
-            >
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              ) : initials}
-            </div>
-            <div>
-              <h1 style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", margin: "0 0 10px" }}>
-                {displayName}
-              </h1>
-              <div style={{ display: "flex", gap: 24, fontSize: 14, color: "#64748B" }}>
-                <span><strong style={{ color: "#0F172A" }}>{totalWishes}</strong> {totalWishes === 1 ? "wish" : "wishes"}</span>
-                <span><strong style={{ color: "#0F172A" }}>{wishlists.length}</strong> {wishlists.length === 1 ? "wishlist" : "wishlists"}</span>
-                <Link href="/friends" style={{ color: "#38A3C7", textDecoration: "none" }}>
-                  <strong style={{ color: "#0F172A" }}>{friendCount}</strong> {friendCount === 1 ? "friend" : "friends"}
+                color: "white", fontWeight: 700, fontSize: 24,
+                flexShrink: 0, overflow: "hidden",
+                boxShadow: "0 0 0 4px white, 0 0 0 6px #E0F4FA",
+              }}>
+                {initials}
+                {avatarUrl && (
+                  <img
+                    src={avatarUrl}
+                    alt=""
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={(e) => { e.currentTarget.style.display = "none" }}
+                  />
+                )}
+              </div>
+              <div>
+                <p style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 4px" }}>{displayName}</p>
+                <Link href="/profile" style={{ fontSize: 13, color: "#38A3C7", textDecoration: "none", fontWeight: 500 }}>
+                  Edit profile →
                 </Link>
               </div>
             </div>
+
+            {/* Stats */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[
+                { value: wishlists.length, label: wishlists.length === 1 ? "Wishlist" : "Wishlists", href: null, color: "#E0F4FA", text: "#1E6B88" },
+                { value: totalWishes,      label: totalWishes === 1 ? "Wish" : "Wishes",             href: null, color: "#F3E8FF", text: "#7C3AED" },
+                { value: friendCount,      label: friendCount === 1 ? "Friend" : "Friends",           href: "/friends", color: "#DCFCE7", text: "#15803D" },
+              ].map(({ value, label, href, color, text }) => {
+                const inner = (
+                  <div style={{
+                    background: color, borderRadius: 14,
+                    padding: "14px 20px", textAlign: "center", minWidth: 90,
+                  }}>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: text, lineHeight: 1 }}>{value}</div>
+                    <div style={{ fontSize: 12, color: text, opacity: 0.75, marginTop: 4, fontWeight: 500 }}>{label}</div>
+                  </div>
+                )
+                return href
+                  ? <Link key={label} href={href} style={{ textDecoration: "none" }}>{inner}</Link>
+                  : <div key={label}>{inner}</div>
+              })}
+            </div>
           </div>
 
-          {/* My wishlists */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: "#0F172A", margin: 0 }}>My wishlists</h2>
+          {/* ── My Wishlists ── */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", margin: "0 0 2px" }}>My Wishlists</h2>
+              <p style={{ fontSize: 13, color: "#94A3B8", margin: 0 }}>
+                {wishlists.length === 0 ? "No wishlists yet" : `${wishlists.length} ${wishlists.length === 1 ? "list" : "lists"} · ${totalWishes} ${totalWishes === 1 ? "wish" : "wishes"}`}
+              </p>
+            </div>
             <button
               onClick={() => setShowModal(true)}
               style={{
-                width: 32, height: 32, borderRadius: "50%", background: "#0F172A",
-                border: "none", cursor: "pointer", color: "white", fontSize: 20, lineHeight: 1,
-                display: "flex", alignItems: "center", justifyContent: "center",
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "9px 18px", borderRadius: 10,
+                background: "#0F172A", color: "white",
+                border: "none", cursor: "pointer",
+                fontSize: 13, fontWeight: 700, letterSpacing: "0.04em",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                transition: "transform 0.15s",
               }}
+              onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px)"}
+              onMouseLeave={e => e.currentTarget.style.transform = ""}
             >
-              +
+              + NEW LIST
             </button>
           </div>
 
@@ -82,14 +162,51 @@ export default function DashboardClient({
             onCreateClick={() => setShowModal(true)}
           />
 
-          {/* Lists I follow */}
+          {/* ── Followed Lists ── */}
           {followedLists.length > 0 && (
             <>
-              <h2 style={{ fontSize: 16, fontWeight: 600, color: "#0F172A", margin: "48px 0 20px" }}>
-                Lists I follow
-              </h2>
+              <div style={{ margin: "52px 0 20px", display: "flex", alignItems: "center", gap: 12 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", margin: 0 }}>Following</h2>
+                <span style={{
+                  background: "#E0F4FA", color: "#1E6B88",
+                  fontSize: 12, fontWeight: 700, borderRadius: 20,
+                  padding: "2px 10px",
+                }}>
+                  {followedLists.length}
+                </span>
+              </div>
               <WishlistGrid wishlists={followedLists} isOwner={false} showOwner />
             </>
+          )}
+
+          {/* ── Empty state ── */}
+          {wishlists.length === 0 && (
+            <div style={{
+              marginTop: 8,
+              padding: "48px 24px",
+              background: "white", borderRadius: 20,
+              border: "2px dashed #E2E8F0",
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>🎁</div>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: "#0F172A", margin: "0 0 8px" }}>
+                Create your first wishlist
+              </h3>
+              <p style={{ fontSize: 14, color: "#94A3B8", margin: "0 0 24px" }}>
+                Add wishes, share with friends, and never get a bad gift again.
+              </p>
+              <button
+                onClick={() => setShowModal(true)}
+                style={{
+                  padding: "12px 28px", borderRadius: 10,
+                  background: "#38A3C7", color: "white",
+                  border: "none", cursor: "pointer",
+                  fontSize: 14, fontWeight: 700,
+                }}
+              >
+                Create a Wishlist
+              </button>
+            </div>
           )}
 
         </div>

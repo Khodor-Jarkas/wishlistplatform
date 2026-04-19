@@ -183,11 +183,15 @@ export async function markAsReceived(wishId: string, wishlistId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Not authenticated" }
 
-  const { error } = await supabase.from("wishes").delete().eq("id", wishId)
+  const { error } = await supabase
+    .from("wishes")
+    .update({ is_received: true })
+    .eq("id", wishId)
   if (error) return { error: error.message }
 
   revalidatePath(`/wishlists/${wishlistId}`)
   revalidatePath("/dashboard")
+  revalidatePath("/reservations")
   return { success: true }
 }
 
@@ -222,6 +226,43 @@ export async function moveWish(wishId: string, newWishlistId: string, currentWis
   return { success: true }
 }
 
+export async function copyWishToList(wishId: string, targetWishlistId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  // Verify user owns the target wishlist
+  const { data: wl, error: wlErr } = await supabase
+    .from("wishlists").select("id")
+    .eq("id", targetWishlistId).eq("user_id", user.id).single()
+  if (wlErr || !wl) return { error: "Wishlist not found" }
+
+  // Fetch source wish fields
+  const { data: source, error: fetchErr } = await supabase
+    .from("wishes")
+    .select("title, description, url, image_url, price, currency, quantity, priority")
+    .eq("id", wishId).single()
+  if (fetchErr || !source) return { error: "Wish not found" }
+
+  const { error } = await supabase.from("wishes").insert({
+    wishlist_id:  targetWishlistId,
+    title:        source.title,
+    description:  source.description,
+    url:          source.url,
+    image_url:    source.image_url,
+    price:        source.price,
+    currency:     source.currency,
+    quantity:     source.quantity,
+    priority:     source.priority,
+  })
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/wishlists/${targetWishlistId}`)
+  revalidatePath("/dashboard")
+  return { success: true }
+}
+
 export async function reserveWish(wishId: string, wishlistId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -231,9 +272,46 @@ export async function reserveWish(wishId: string, wishlistId: string) {
     wish_id:     wishId,
     reserved_by: user.id,
   })
-
   if (error) return { error: error.message }
+
+  await supabase.from("wishes").update({ is_reserved: true }).eq("id", wishId)
+
   revalidatePath(`/wishlists/${wishlistId}`)
+  revalidatePath("/reservations")
+  return { success: true }
+}
+
+export async function markAsBought(reservationId: string, wishlistId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  const { error } = await supabase
+    .from("reservations")
+    .update({ status: "bought" })
+    .eq("id", reservationId)
+    .eq("reserved_by", user.id)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/wishlists/${wishlistId}`)
+  revalidatePath("/reservations")
+  return { success: true }
+}
+
+export async function markAsUnbought(reservationId: string, wishlistId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  const { error } = await supabase
+    .from("reservations")
+    .update({ status: "reserved" })
+    .eq("id", reservationId)
+    .eq("reserved_by", user.id)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/wishlists/${wishlistId}`)
+  revalidatePath("/reservations")
   return { success: true }
 }
 
@@ -247,8 +325,11 @@ export async function unreserveWish(wishId: string, wishlistId: string) {
     .delete()
     .eq("wish_id", wishId)
     .eq("reserved_by", user.id)
-
   if (error) return { error: error.message }
+
+  await supabase.from("wishes").update({ is_reserved: false }).eq("id", wishId)
+
   revalidatePath(`/wishlists/${wishlistId}`)
+  revalidatePath("/reservations")
   return { success: true }
 }

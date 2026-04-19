@@ -156,6 +156,70 @@ export async function removeFriend(friendshipId: string) {
   return { success: true }
 }
 
+export async function fetchSuggestedUsers(): Promise<{ users: Profile[] }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { users: [] }
+
+  // Get my existing connections (all statuses)
+  const { data: connections } = await supabase
+    .from("friendships")
+    .select("requester_id, addressee_id")
+    .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
+
+  const knownIds = new Set<string>([user.id])
+  const myFriendIds: string[] = []
+  for (const c of connections ?? []) {
+    const other = c.requester_id === user.id ? c.addressee_id : c.requester_id
+    knownIds.add(other)
+    myFriendIds.push(other)
+  }
+
+  // Friends-of-friends
+  if (myFriendIds.length > 0) {
+    const { data: fof } = await supabase
+      .from("friendships")
+      .select("requester_id, addressee_id")
+      .or(
+        myFriendIds.map(id => `requester_id.eq.${id}`).join(",") + "," +
+        myFriendIds.map(id => `addressee_id.eq.${id}`).join(",")
+      )
+      .eq("status", "accepted")
+
+    const candidateIds = [...new Set(
+      (fof ?? []).flatMap(f => [f.requester_id, f.addressee_id]).filter(id => !knownIds.has(id))
+    )].slice(0, 20)
+
+    if (candidateIds.length > 0) {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, username, first_name, last_name, full_name, avatar_url, bio, country, is_private, language, date_of_birth, gender, phone, zip_code, created_at, updated_at")
+        .in("id", candidateIds)
+        .eq("is_private", false)
+        .limit(10)
+      if (data && data.length > 0) return { users: data as Profile[] }
+    }
+  }
+
+  // Fallback: same country or just recent users
+  const { data: myProfile } = await supabase
+    .from("profiles").select("country").eq("id", user.id).single()
+
+  let query = supabase
+    .from("profiles")
+    .select("id, username, first_name, last_name, full_name, avatar_url, bio, country, is_private, language, date_of_birth, gender, phone, zip_code, created_at, updated_at")
+    .neq("id", user.id)
+    .eq("is_private", false)
+    .limit(10)
+
+  if (myProfile?.country) {
+    query = query.eq("country", myProfile.country)
+  }
+
+  const { data } = await query.order("created_at", { ascending: false })
+  return { users: (data as Profile[]) ?? [] }
+}
+
 export async function searchUsers(query: string): Promise<{ users: Profile[]; error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { getInitials } from "@/lib/utils"
+import { WISHLIST_COLOR_PRESETS } from "@/components/wishlist/WishlistCard"
 import type { TrendingWishlist } from "@/lib/actions/inspire"
 
 const OCCASION_LABELS: Record<string, string> = {
@@ -14,6 +15,8 @@ const OCCASION_LABELS: Record<string, string> = {
   other:       "Other",
 }
 
+const DEFAULT_GRADIENTS = Object.values(WISHLIST_COLOR_PRESETS)
+
 export default function TrendingCard({ wl }: { wl: TrendingWishlist }) {
   const ownerName = wl.profile?.first_name
     ? `${wl.profile.first_name} ${wl.profile.last_name ?? ""}`.trim()
@@ -21,6 +24,10 @@ export default function TrendingCard({ wl }: { wl: TrendingWishlist }) {
 
   const initials = getInitials(wl.profile ?? {})
   const occasion = wl.occasion ? OCCASION_LABELS[wl.occasion] ?? wl.occasion : null
+
+  const gradient = wl.color && WISHLIST_COLOR_PRESETS[wl.color]
+    ? WISHLIST_COLOR_PRESETS[wl.color]
+    : DEFAULT_GRADIENTS[wl.title.charCodeAt(0) % DEFAULT_GRADIENTS.length]
 
   return (
     <Link href={`/wishlists/${wl.id}`} style={{ textDecoration: "none", display: "block" }}>
@@ -42,24 +49,30 @@ export default function TrendingCard({ wl }: { wl: TrendingWishlist }) {
           e.currentTarget.style.transform  = "translateY(0)"
         }}
       >
-        {/* Cover image */}
+        {/* Cover image / gradient */}
         <div style={{
           height: 140,
-          background: wl.cover_image_url ? "transparent" : "linear-gradient(135deg, #E0F2FE, #BAE6FD)",
+          background: wl.cover_image_url ? "transparent" : gradient,
           position: "relative",
           overflow: "hidden",
         }}>
-          {wl.cover_image_url ? (
+          {wl.cover_image_url && (
             <img
               src={wl.cover_image_url}
               alt={wl.title}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
-          ) : (
-            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#7DD3FC" strokeWidth="1.2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 17.75l-6.172 3.245 1.179-6.873-4.993-4.867 6.9-1.002L12 2.25l3.086 6.003 6.9 1.002-4.993 4.867 1.179 6.873z" />
-              </svg>
+          )}
+          {wl.wish_count > 0 && (
+            <div style={{
+              position: "absolute", top: 10, right: 10,
+              width: 28, height: 28, borderRadius: "50%",
+              background: "white", display: "flex",
+              alignItems: "center", justifyContent: "center",
+              fontSize: 12, fontWeight: 700, color: "#0F172A",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
+            }}>
+              {wl.wish_count}
             </div>
           )}
           {occasion && (

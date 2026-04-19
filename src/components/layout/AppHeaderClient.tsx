@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button"
 import InspirationsDropdown from "@/components/wishit/InspirationsDropdown"
 import ProfilePanel from "@/components/auth/ProfilePanel"
 import NotificationBell from "@/components/notifications/NotificationBell"
+import FriendsDrawer from "@/components/friends/FriendsDrawer"
 import { useAddWishModal } from "@/context/AddWishModalContext"
 import { getInitials } from "@/lib/utils"
 import type { Profile } from "@/types"
@@ -17,8 +18,10 @@ interface Props {
 }
 
 export default function AppHeaderClient({ profile, email }: Props) {
-  const [inspOpen, setInspOpen] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [inspOpen, setInspOpen]     = useState(false)
+  const [panelOpen, setPanelOpen]   = useState(false)
+  const [notifOpen, setNotifOpen]   = useState(false)
+  const [friendsOpen, setFriendsOpen] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { open: openAddWish } = useAddWishModal()
   const pathname = usePathname()
@@ -64,30 +67,40 @@ export default function AppHeaderClient({ profile, email }: Props) {
                 ☁ ADD WISH
               </Button>
 
-              {/* Add friend */}
-              <Link
-                href="/friends"
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B", display: "flex", alignItems: "center", textDecoration: "none" }}
-                title="Friends"
-              >
-                <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-6 3a5 5 0 110-10 5 5 0 010 10zm-7 7a8 8 0 0116 0H3z" />
-                </svg>
-              </Link>
+              {/* Friends */}
+              <FriendsDrawer
+                open={friendsOpen}
+                onOpen={() => { setFriendsOpen(true); setNotifOpen(false); setPanelOpen(false) }}
+                onClose={() => setFriendsOpen(false)}
+                currentUserId={profile.id}
+              />
 
               {/* Notification bell */}
-              <NotificationBell />
+              <NotificationBell
+                open={notifOpen}
+                onOpen={() => { setNotifOpen(true); setFriendsOpen(false); setPanelOpen(false) }}
+                onClose={() => setNotifOpen(false)}
+              />
 
               {/* Avatar */}
               <button
-                onClick={() => setPanelOpen(true)}
+                onClick={() => { setPanelOpen(true); setNotifOpen(false); setFriendsOpen(false) }}
                 style={{
                   width: 36, height: 36, borderRadius: "50%", background: "#38A3C7",
                   border: "none", cursor: "pointer", color: "white", fontWeight: 700, fontSize: 13,
                   display: "flex", alignItems: "center", justifyContent: "center",
+                  position: "relative", overflow: "hidden", padding: 0,
                 }}
               >
                 {initials}
+                {profile.avatar_url && (
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={(e) => { e.currentTarget.style.display = "none" }}
+                  />
+                )}
               </button>
             </div>
 
@@ -95,13 +108,12 @@ export default function AppHeaderClient({ profile, email }: Props) {
         </div>
       </header>
 
-      {panelOpen && (
-        <ProfilePanel
-          profile={profile}
-          email={email}
-          onClose={() => setPanelOpen(false)}
-        />
-      )}
+      <ProfilePanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        profile={profile}
+        email={email}
+      />
     </>
   )
 }

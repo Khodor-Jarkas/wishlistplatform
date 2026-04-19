@@ -7,11 +7,13 @@ import {
   toggleMostWanted,
   markAsReceived,
   moveWish,
+  copyWishToList,
   reserveWish,
   unreserveWish,
 } from "@/lib/actions/wishes"
 import { formatPrice } from "@/lib/utils"
 import { useAuthModal } from "@/context/AuthModalContext"
+import { useUser } from "@/hooks/useUser"
 import type { Wish } from "@/types"
 
 // ── Icons ────────────────────────────────────────────────────
@@ -110,8 +112,11 @@ export default function WishCard({
   onEditRequest,
 }: Props) {
   const { openLogin }                 = useAuthModal()
+  const { user: clientUser }          = useUser()
   const [menuOpen, setMenuOpen]       = useState(false)
   const [showMove, setShowMove]       = useState(false)
+  const [showCopyTo, setShowCopyTo]   = useState(false)
+  const [wishCopied, setWishCopied]   = useState(false)
   const [deleting, setDeleting]       = useState(false)
   const [cardHovered, setCardHovered] = useState(false)
   const [touchDevice, setTouchDevice] = useState(false)
@@ -120,8 +125,13 @@ export default function WishCard({
   const menuRef                       = useRef<HTMLDivElement>(null)
   const leaveTimer                    = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const reservation    = (wish.reservations ?? [])[0] ?? null
-  const isReservedByMe = !!reservation && reservation.reserved_by === currentUserId
+  // Use client-side user as fallback in case server-side auth didn't resolve
+  const effectiveUserId = clientUser?.id ?? currentUserId
+  const reservation     = (wish.reservations ?? [])[0] ?? null
+  // Prefer server-computed value; fall back to join data + client user
+  const isReservedByMe  = wish.isReservedByMe
+    ?? (!!reservation && reservation.reserved_by === effectiveUserId)
+  const isBoughtByMe    = isReservedByMe && reservation?.status === "bought"
   const isMostWanted   = wish.priority === 2
 
   // Detect touch device on first touch — show button permanently on mobile
@@ -162,6 +172,7 @@ export default function WishCard({
       setCardHovered(false)
       setMenuOpen(false)
       setShowMove(false)
+      setShowCopyTo(false)
       setDeleting(false)
     }, 320)
   }
@@ -184,6 +195,17 @@ export default function WishCard({
     setMenuOpen(false)
     setShowMove(false)
     start(() => void moveWish(wish.id, newWishlistId, wishlistId))
+  }
+  function handleCopyTo(targetWishlistId: string) {
+    setMenuOpen(false)
+    setShowCopyTo(false)
+    start(async () => {
+      const res = await copyWishToList(wish.id, targetWishlistId)
+      if (!res?.error) {
+        setWishCopied(true)
+        setTimeout(() => setWishCopied(false), 2000)
+      }
+    })
   }
   function handleReserve() {
     setMenuOpen(false)
@@ -244,19 +266,29 @@ export default function WishCard({
           </div>
         )}
 
-        {/* Reserved overlay (visitors only) */}
+        {/* Reserved / Bought overlay (visitors only) */}
         {!isOwner && wish.is_reserved && (
           <div style={{
             position: "absolute", inset: 0,
-            background: "rgba(0,0,0,0.48)",
+            background: isBoughtByMe ? "rgba(16,185,129,0.55)" : "rgba(0,0,0,0.45)",
             display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "background 0.2s",
           }}>
             <span style={{
-              color: "white", fontSize: 12, fontWeight: 600,
-              background: "rgba(0,0,0,0.32)", borderRadius: 8,
-              padding: "5px 12px", letterSpacing: "0.02em",
+              color: "white",
+              fontSize: 13,
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              textAlign: "center",
+              textShadow: "0 1px 4px rgba(0,0,0,0.3)",
+              padding: "0 8px",
             }}>
-              {isReservedByMe ? "Reserved by you" : "Reserved"}
+              {isBoughtByMe
+                ? <><span>Bought</span><br /><span>by you</span></>
+                : isReservedByMe
+                  ? <><span>Reserved</span><br /><span>by you</span></>
+                  : "Reserved"}
             </span>
           </div>
         )}
@@ -307,6 +339,7 @@ export default function WishCard({
               }
               setMenuOpen((v) => !v)
               setShowMove(false)
+              setShowCopyTo(false)
               setDeleting(false)
             }}
             style={{
@@ -388,33 +421,46 @@ export default function WishCard({
                 </>
               ) : (
                 <>
-                  <MenuItem
-                    icon={<IconBookmarkPlus />}
-                    label="Add to my wishlist"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      if (!currentUserId) { openLogin(); return }
-                      // TODO: copy wish to own list
-                    }}
-                  />
-                  <MenuItem icon={<IconShare />} label="Share wishlist" onClick={handleShare} />
-                  {wish.url && (
-                    <MenuItem icon={<IconExternalLink />} label="Visit store" onClick={() => { setMenuOpen(false); window.open(wish.url!, "_blank") }} />
-                  )}
-                  <Divider />
-                  {isReservedByMe ? (
-                    <MenuItem icon={<IconXMark />} label="Remove my reservation" onClick={handleUnreserve} danger />
+                  {showCopyTo ? (
+                    <>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", padding: "6px 14px 4px", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Add to
+                      </p>
+                      {userWishlists.map((wl) => (
+                        <MenuItem key={wl.id} icon={<IconBookmarkPlus />} label={wl.title} onClick={() => handleCopyTo(wl.id)} />
+                      ))}
+                      <MenuItem icon={<IconChevronLeft />} label="Back" onClick={() => setShowCopyTo(false)} />
+                    </>
                   ) : (
-                    !wish.is_reserved && (
+                    <>
                       <MenuItem
-                        icon={<IconCheck />}
-                        label="Reserve this wish"
+                        icon={<IconBookmarkPlus />}
+                        label={wishCopied ? "✓ Added!" : "Add to my wishlist"}
                         onClick={() => {
-                          if (!currentUserId) { setMenuOpen(false); openLogin(); return }
-                          handleReserve()
+                          if (!effectiveUserId) { setMenuOpen(false); openLogin(); return }
+                          if (userWishlists.length > 0) setShowCopyTo(true)
                         }}
                       />
-                    )
+                      <MenuItem icon={<IconShare />} label="Share wishlist" onClick={handleShare} />
+                      {wish.url && (
+                        <MenuItem icon={<IconExternalLink />} label="Visit store" onClick={() => { setMenuOpen(false); window.open(wish.url!, "_blank") }} />
+                      )}
+                      <Divider />
+                      {isReservedByMe ? (
+                        <MenuItem icon={<IconXMark />} label="Remove my reservation" onClick={handleUnreserve} danger />
+                      ) : (
+                        !wish.is_reserved && (
+                          <MenuItem
+                            icon={<IconCheck />}
+                            label="Reserve this wish"
+                            onClick={() => {
+                              if (!effectiveUserId) { setMenuOpen(false); openLogin(); return }
+                              handleReserve()
+                            }}
+                          />
+                        )
+                      )}
+                    </>
                   )}
                 </>
               )}

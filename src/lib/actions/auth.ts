@@ -114,6 +114,8 @@ export async function updateProfile(formData: FormData) {
   const firstName = formData.get("first_name") as string
   const lastName  = formData.get("last_name")  as string
 
+  const avatarUrl = formData.get("avatar_url") as string
+
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -125,6 +127,8 @@ export async function updateProfile(formData: FormData) {
       phone:         formData.get("phone") as string || null,
       zip_code:      formData.get("zip_code") as string || null,
       country:       formData.get("country") as string || null,
+      bio:           formData.get("bio") as string || null,
+      avatar_url:    avatarUrl || null,
       is_private:    formData.get("is_private") === "true",
       language:      formData.get("language") as string || "en",
       updated_at:    new Date().toISOString(),

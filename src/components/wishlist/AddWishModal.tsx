@@ -142,9 +142,11 @@ export default function AddWishModal() {
   async function handlePaste() {
     try {
       const text = await navigator.clipboard.readText()
-      setLinkValue(text)
+      if (text) setLinkValue(text.trim())
+      pasteRef.current?.focus()
     } catch {
       pasteRef.current?.focus()
+      setScrapeError("Couldn't read clipboard — paste with Ctrl/⌘+V")
     }
   }
 
@@ -207,10 +209,11 @@ export default function AddWishModal() {
             <div style={{
               display: "flex", alignItems: "center",
               border: "1.5px solid #38A3C7", borderRadius: 10,
-              background: "#F0F9FF", overflow: "hidden", marginBottom: 16,
+              background: "#F0F9FF", marginBottom: 16,
+              padding: 4,
             }}>
               <svg width="18" height="18" fill="none" stroke="#94A3B8" strokeWidth="1.5" viewBox="0 0 24 24"
-                style={{ flexShrink: 0, margin: "0 12px" }}>
+                style={{ flexShrink: 0, margin: "0 8px 0 8px" }}>
                 <path strokeLinecap="round" strokeLinejoin="round"
                   d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
               </svg>
@@ -222,15 +225,20 @@ export default function AddWishModal() {
                 placeholder="Insert product link"
                 style={{
                   flex: 1, border: "none", background: "transparent",
-                  fontSize: 14, color: "#0F172A", outline: "none", padding: "14px 0",
+                  fontSize: 14, color: "#0F172A", outline: "none",
+                  padding: "10px 4px",
                 }}
               />
               <button
+                type="button"
                 onClick={handlePaste}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#2980b9")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#38A3C7")}
                 style={{
                   background: "#38A3C7", border: "none", color: "white",
-                  fontWeight: 700, fontSize: 12, letterSpacing: "0.06em",
-                  padding: "14px 18px", cursor: "pointer", flexShrink: 0,
+                  fontWeight: 700, fontSize: 12, letterSpacing: "0.08em",
+                  padding: "10px 18px", cursor: "pointer", flexShrink: 0,
+                  borderRadius: 7, transition: "background 0.15s",
                 }}
               >
                 PASTE

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { createWishlist } from "@/lib/actions/wishlists"
 import Select from "@/components/ui/Select"
+import { WISHLIST_COLOR_PRESETS } from "./WishlistCard"
 
 const OCCASIONS = [
   { label: "Birthday",    value: "birthday" },
@@ -55,6 +56,7 @@ export default function CreateWishlistModal({ onClose }: Props) {
   const [selectedVisibility, setSelectedVisibility] = useState("public")
   const [coverUrl, setCoverUrl] = useState("")
   const [coverPreview, setCoverPreview] = useState("")
+  const [selectedColor, setSelectedColor] = useState("blue")
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState("")
   const [isPending, start] = useTransition()
@@ -84,6 +86,7 @@ export default function CreateWishlistModal({ onClose }: Props) {
     fd.set("type", selectedType)
     fd.set("visibility", selectedVisibility)
     if (coverUrl) fd.set("cover_image_url", coverUrl)
+    fd.set("color", selectedColor)
     start(async () => {
       const res = await createWishlist(fd)
       if (res?.error) setError(res.error)
@@ -163,7 +166,7 @@ export default function CreateWishlistModal({ onClose }: Props) {
               </div>
 
               {/* Name */}
-              <div style={{ marginBottom: 28 }}>
+              <div style={{ marginBottom: selectedType === "on_behalf" ? 16 : 28 }}>
                 <label style={{ fontSize: 13, fontWeight: 500, color: "#334155", display: "block", marginBottom: 8 }}>
                   Name your wishlist
                 </label>
@@ -181,6 +184,56 @@ export default function CreateWishlistModal({ onClose }: Props) {
                   onBlur={(e) => (e.currentTarget.style.borderColor = "#E2E8F0")}
                 />
               </div>
+
+              {/* Color picker — only when no cover image */}
+              {!coverPreview && (
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: "#334155", display: "block", marginBottom: 10 }}>
+                    Card Color
+                  </label>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {Object.entries(WISHLIST_COLOR_PRESETS).map(([key, gradient]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSelectedColor(key)}
+                        style={{
+                          width: 32, height: 32, borderRadius: "50%",
+                          background: gradient,
+                          border: selectedColor === key ? "3px solid #0F172A" : "3px solid transparent",
+                          outline: selectedColor === key ? "2px solid white" : "none",
+                          outlineOffset: selectedColor === key ? "-5px" : "0",
+                          cursor: "pointer",
+                          padding: 0,
+                          transition: "transform 0.1s",
+                          transform: selectedColor === key ? "scale(1.15)" : "scale(1)",
+                        }}
+                        title={key.charAt(0).toUpperCase() + key.slice(1)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Beneficiary name — only for on_behalf */}
+              {selectedType === "on_behalf" && (
+                <div style={{ marginBottom: 28 }}>
+                  <label style={{ fontSize: 13, fontWeight: 500, color: "#334155", display: "block", marginBottom: 8 }}>
+                    Who is this for?
+                  </label>
+                  <input
+                    name="beneficiary_name"
+                    placeholder="e.g. Emma, my daughter"
+                    style={{
+                      width: "100%", padding: "12px 14px", borderRadius: 8,
+                      border: "1px solid #E2E8F0", fontSize: 14, color: "#0F172A",
+                      outline: "none", boxSizing: "border-box",
+                    }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "#38A3C7")}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = "#E2E8F0")}
+                  />
+                </div>
+              )}
 
               {error && (
                 <p style={{ color: "#EF4444", fontSize: 13, textAlign: "center", marginBottom: 16 }}>{error}</p>

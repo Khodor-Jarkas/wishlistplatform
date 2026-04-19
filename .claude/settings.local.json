@@ -31,7 +31,11 @@
       "Skill(claude-api)",
       "Skill(claude-api:*)",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(ls src/middleware* src/proxy*)"
+      "Bash(ls src/middleware* src/proxy*)",
+      "Bash(npx --yes tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc --version)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

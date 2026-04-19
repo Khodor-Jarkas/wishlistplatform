@@ -6,13 +6,20 @@ import type { Wishlist } from "@/types"
 import EditWishlistModal from "./EditWishlistModal"
 import DeleteConfirmModal from "./DeleteConfirmModal"
 
-const GRADIENTS = [
-  "linear-gradient(135deg, #38A3C7 0%, #1E6B88 100%)",
-  "linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)",
-  "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)",
-  "linear-gradient(135deg, #10B981 0%, #059669 100%)",
-  "linear-gradient(135deg, #EC4899 0%, #BE185D 100%)",
-]
+export const WISHLIST_COLOR_PRESETS: Record<string, string> = {
+  blue:   "linear-gradient(135deg, #38A3C7 0%, #1E6B88 100%)",
+  purple: "linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)",
+  amber:  "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)",
+  green:  "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+  pink:   "linear-gradient(135deg, #EC4899 0%, #BE185D 100%)",
+  red:    "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
+  orange: "linear-gradient(135deg, #F97316 0%, #EA580C 100%)",
+  teal:   "linear-gradient(135deg, #14B8A6 0%, #0F766E 100%)",
+  coral:  "linear-gradient(135deg, #FB7185 0%, #BE123C 100%)",
+  slate:  "linear-gradient(135deg, #64748B 0%, #334155 100%)",
+}
+
+const DEFAULT_GRADIENTS = Object.values(WISHLIST_COLOR_PRESETS)
 
 export interface WishlistWithCounts extends Wishlist {
   wish_count: number
@@ -31,7 +38,9 @@ export default function WishlistCard({ wishlist, isOwner, showOwner = false }: P
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
-  const gradient = GRADIENTS[wishlist.title.charCodeAt(0) % GRADIENTS.length]
+  const gradient = wishlist.color && WISHLIST_COLOR_PRESETS[wishlist.color]
+    ? WISHLIST_COLOR_PRESETS[wishlist.color]
+    : DEFAULT_GRADIENTS[wishlist.title.charCodeAt(0) % DEFAULT_GRADIENTS.length]
 
   const ownerName = wishlist.profiles
     ? (wishlist.profiles.first_name

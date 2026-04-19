@@ -9,13 +9,17 @@ import Container from "../ui/Container"
 import Button from "../ui/Button"
 import InspirationsDropdown from "@/components/wishit/InspirationsDropdown"
 import ProfilePanel from "@/components/auth/ProfilePanel"
+import NotificationBell from "@/components/notifications/NotificationBell"
+import FriendsDrawer from "@/components/friends/FriendsDrawer"
 import AuthModal from "@/components/auth/AuthModal"
 
 export default function Header() {
   const { user, profile, loading } = useUser()
   const { openLogin, openSignup }  = useAuthModal()
-  const [inspOpen, setInspOpen]    = useState(false)
-  const [panelOpen, setPanelOpen]  = useState(false)
+  const [inspOpen, setInspOpen]      = useState(false)
+  const [panelOpen, setPanelOpen]    = useState(false)
+  const [notifOpen, setNotifOpen]    = useState(false)
+  const [friendsOpen, setFriendsOpen] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pathname = usePathname()
 
@@ -51,34 +55,43 @@ export default function Header() {
                 </nav>
 
                 {/* Right actions */}
-                <div className="flex items-center gap-4 shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <Button href="/wishlists/new" style={{ fontSize: 12, letterSpacing: "0.05em" }}>
                     ☁ ADD WISH
                   </Button>
 
-                  {/* Add friend */}
-                  <button className="bg-transparent border-none cursor-pointer text-neutral-500 hover:text-brand" title="Find friends">
-                    <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-6 3a5 5 0 110-10 5 5 0 010 10zm-7 7a8 8 0 0116 0H3z" />
-                    </svg>
-                  </button>
+                  {/* Friends */}
+                  <FriendsDrawer
+                    open={friendsOpen}
+                    onOpen={() => { setFriendsOpen(true); setNotifOpen(false); setPanelOpen(false) }}
+                    onClose={() => setFriendsOpen(false)}
+                    currentUserId={user?.id ?? null}
+                  />
 
-                  {/* Bell */}
-                  <button className="bg-transparent border-none cursor-pointer text-neutral-500 hover:text-brand" title="Notifications">
-                    <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                    </svg>
-                  </button>
+                  {/* Notifications */}
+                  <NotificationBell
+                    open={notifOpen}
+                    onOpen={() => { setNotifOpen(true); setFriendsOpen(false); setPanelOpen(false) }}
+                    onClose={() => setNotifOpen(false)}
+                  />
 
-                  {/* Avatar */}
+                  {/* Avatar → profile drawer */}
                   <button
-                    onClick={() => setPanelOpen(true)}
+                    onClick={() => { setPanelOpen(true); setNotifOpen(false); setFriendsOpen(false) }}
                     style={{
-                      width: 36, height: 36, borderRadius: "50%", background: "#38A3C7",
-                      border: "none", cursor: "pointer", color: "white", fontWeight: 700, fontSize: 13,
+                      width: 36, height: 36, borderRadius: "50%",
+                      background: "#38A3C7", border: "2px solid transparent",
+                      cursor: "pointer", color: "white", fontWeight: 700, fontSize: 13,
+                      overflow: "hidden", flexShrink: 0,
+                      transition: "border-color 0.15s",
+                      outline: panelOpen ? "2px solid #38A3C7" : "none",
+                      outlineOffset: 2,
                     }}
+                    title="Profile"
                   >
-                    {initials}
+                    {profile?.avatar_url
+                      ? <img src={profile.avatar_url} alt={initials} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      : initials}
                   </button>
                 </div>
               </>
@@ -103,16 +116,17 @@ export default function Header() {
         </Container>
       </header>
 
-      {/* Profile panel */}
-      {panelOpen && profile && (
+      {/* Profile drawer */}
+      {profile && (
         <ProfilePanel
+          open={panelOpen}
+          onClose={() => setPanelOpen(false)}
           profile={profile}
           email={user?.email ?? ""}
-          onClose={() => setPanelOpen(false)}
         />
       )}
 
-      {/* Auth modal — rendered here so it overlays the full page */}
+      {/* Auth modal */}
       <AuthModal />
     </>
   )

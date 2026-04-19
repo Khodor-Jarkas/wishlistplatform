@@ -10,15 +10,15 @@ interface Props {
 export default async function WishlistPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
-  const { data: raw, error } = await supabase
-    .from("wishlists")
-    .select("*, profiles!user_id(*), wishes(count)")
-    .eq("id", id)
-    .single()
+  // Auth + wishlist fetch in parallel — neither depends on the other
+  const [
+    { data: { user } },
+    { data: raw, error },
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from("wishlists").select("*, profiles!user_id(*), wishes(count)").eq("id", id).single(),
+  ])
 
   if (error) {
     if (error.code === "PGRST116") notFound()
@@ -30,45 +30,67 @@ export default async function WishlistPage({ params }: Props) {
   const isOwner = user?.id === raw.user_id
   if (raw.visibility === "private" && !isOwner) redirect("/")
 
-  // Follower count
-  let follower_count = 0
-  const { count: fc, error: fcErr } = await supabase
-    .from("wishlist_followers")
-    .select("*", { count: "exact", head: true })
-    .eq("wishlist_id", id)
-  if (!fcErr) follower_count = fc ?? 0
-
-  // Wishes with reservation data
-  const { data: wishesRaw } = await supabase
-    .from("wishes")
-    .select("*, reservations(id, reserved_by)")
-    .eq("wishlist_id", id)
-    .order("created_at", { ascending: true })
-
-  const wishes: Wish[] = wishesRaw ?? []
-
-  // Follow state
-  let isFollowing = false
-  if (user && !isOwner) {
-    const { data: follow, error: followErr } = await supabase
+  // All remaining queries in parallel
+  const [
+    { count: fc, error: fcErr },
+    { data: wishesRaw },
+    followResult,
+    wishlistsResult,
+    myReservationsResult,
+  ] = await Promise.all([
+    // Follower count
+    supabase
       .from("wishlist_followers")
-      .select("wishlist_id")
-      .eq("wishlist_id", id)
-      .eq("user_id", user.id)
-      .maybeSingle()
-    if (!followErr) isFollowing = !!follow
-  }
+      .select("*", { count: "exact", head: true })
+      .eq("wishlist_id", id),
 
-  // Owner's own wishlists (for "Move to another wishlist")
-  let userWishlists: { id: string; title: string }[] = []
-  if (user) {
-    const { data: wl } = await supabase
-      .from("wishlists")
-      .select("id, title")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-    userWishlists = wl ?? []
-  }
+    // Wishes with reservation data
+    // status column added by migration 010 — selected only after that migration is applied
+    supabase
+      .from("wishes")
+      .select("*, reservations(id, reserved_by)")
+      .eq("wishlist_id", id)
+      .order("created_at", { ascending: true }),
+
+    // Follow state (only meaningful for non-owner logged-in users)
+    user && !isOwner
+      ? supabase
+          .from("wishlist_followers")
+          .select("wishlist_id")
+          .eq("wishlist_id", id)
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+
+    // Owner's own wishlists (for "Move to another wishlist")
+    user
+      ? supabase
+          .from("wishlists")
+          .select("id, title")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: null, error: null }),
+
+    // Current user's reservations in this wishlist — authoritative source for "Reserved by you"
+    user && !isOwner
+      ? supabase
+          .from("reservations")
+          .select("wish_id")
+          .eq("reserved_by", user.id)
+      : Promise.resolve({ data: null, error: null }),
+  ])
+
+  const follower_count = fcErr ? 0 : (fc ?? 0)
+  const isFollowing = !followResult.error && !!followResult.data
+  const userWishlists: { id: string; title: string }[] = wishlistsResult.data ?? []
+
+  // Build a set of wish IDs reserved by the current user for O(1) lookup
+  const myReservedWishIds = new Set((myReservationsResult.data ?? []).map((r: any) => r.wish_id))
+
+  const wishes: Wish[] = (wishesRaw ?? []).map((w: any) => ({
+    ...w,
+    isReservedByMe: myReservedWishIds.has(w.id),
+  }))
 
   const wishlist = {
     ...raw,
