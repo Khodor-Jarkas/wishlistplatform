@@ -3,7 +3,7 @@ import Footer from "@/components/layout/Footer"
 import Container from "@/components/ui/Container"
 import { getTrendingWishlists } from "@/lib/actions/inspire"
 import AIGiftFinder from "@/components/inspire/AIGiftFinder"
-import TrendingCard from "@/components/inspire/TrendingCard"
+import InspireTabs from "@/components/inspire/InspireTabs"
 
 export const metadata = { title: "Inspiration" }
 
@@ -47,33 +47,7 @@ export default async function InspirePage() {
 
         <Container>
 
-          {/* Trending Wishlists */}
-          <section style={{ paddingTop: 56 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 8 }}>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0F172A" }}>
-                Trending Wishlists
-              </h2>
-              <span style={{ fontSize: 13, color: "#94A3B8" }}>
-                {wishlists.length} public wishlists
-              </span>
-            </div>
-
-            {wishlists.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 0", color: "#94A3B8" }}>
-                <p style={{ margin: 0 }}>No public wishlists yet. Be the first to share yours!</p>
-              </div>
-            ) : (
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-                gap: 20,
-              }}>
-                {wishlists.map((wl) => (
-                  <TrendingCard key={wl.id} wl={wl} />
-                ))}
-              </div>
-            )}
-          </section>
+          <InspireTabs wishlists={wishlists} />
 
           {/* AI Gift Finder */}
           <section style={{ paddingTop: 64 }}>

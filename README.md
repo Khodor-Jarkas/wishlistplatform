@@ -1,36 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
 
-## Getting Started
+# Wish It
 
-First, run the development server:
+**A modern, social wishlist platform — share what you love, never give a bad gift again.**
+
+Built with Next.js 16, React 19, Supabase, and TypeScript.
+
+</div>
+
+---
+
+## About
+
+Wish It is a full-stack wishlist application that lets users create, organise and share wishlists with friends and family. Friends can reserve gifts behind the scenes so surprises stay intact, browse trending public wishlists for inspiration, and get AI-powered gift suggestions tailored to the recipient.
+
+This project was developed as a senior-year capstone — the goal was to build a production-ready social product end-to-end: authentication, a real-time-friendly data layer, storage, a polished UI, and AI features.
+
+## Features
+
+- **Wishlists** — cover photos or colour presets, visibility controls (public / friends / private), occasion tags, gift-for-someone-else mode
+- **Wishes** — add from a product URL with automatic scraping of title, image, price and description (JSON-LD + Open Graph + microdata)
+- **Reservations** — reserve a friend's wish without the owner knowing who reserved it; mark as bought or release
+- **Friends** — requests, suggestions (friends-of-friends, then same-country), private accounts
+- **Activity feed** — follow what friends are adding publicly
+- **Notifications** — in-app bell for friend requests, reservations, etc.
+- **Inspiration** — trending public wishlists, and an AI Gift Finder that grounds suggestions in real platform data
+- **Profile** — avatar upload with crop, bio, language, country, privacy toggle
+- **Help centre** — searchable FAQ
+
+## Tech stack
+
+| Layer          | Choice                                                            |
+| -------------- | ----------------------------------------------------------------- |
+| Framework      | Next.js 16 (App Router, React Server Components)                  |
+| UI             | React 19, Tailwind CSS 4, custom design system                    |
+| Language       | TypeScript                                                        |
+| Database       | Supabase (Postgres) with Row Level Security                       |
+| Auth           | Supabase Auth (`@supabase/ssr`)                                   |
+| Storage        | Supabase Storage (avatars, wishlist covers)                       |
+| AI             | Groq (Llama 3.3 70B) via the OpenAI SDK for gift recommendations  |
+| Deployment     | Docker + docker-compose, Vercel-ready                             |
+| Quality        | ESLint, Prettier, TypeScript strict mode, GitHub Actions CI       |
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 20 or later
+- npm (or pnpm / yarn / bun)
+- A Supabase project — [create one for free](https://supabase.com)
+
+### Installation
+
+```bash
+git clone https://github.com/Khodor-Jarkas/Wishlist.git
+cd Wishlist
+npm install
+```
+
+### Environment
+
+Copy the example file and fill in your own values:
+
+```bash
+cp .env.example .env.local
+```
+
+Required variables (see [`.env.example`](.env.example) for the full list):
+
+| Variable                        | Where to find it                                           |
+| ------------------------------- | ---------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase dashboard → Project Settings → API               |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase dashboard → Project Settings → API               |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Supabase dashboard → Project Settings → API (server-only) |
+| `GROQ_API_KEY`                  | [console.groq.com](https://console.groq.com) (optional — powers AI Gift Finder) |
+
+### Database
+
+This repository does not ship schema migrations publicly. To provision a database, apply the project's SQL schema to your Supabase instance (tables: `profiles`, `wishlists`, `wishes`, `reservations`, `friendships`, `wishlist_followers`, `activity`, `notifications`) and create the `avatars` and `wishlist-covers` storage buckets with appropriate RLS policies.
+
+### Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Run with Docker
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+docker compose up --build
+```
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Command             | What it does                                      |
+| ------------------- | ------------------------------------------------- |
+| `npm run dev`       | Start the dev server (Turbopack, 4 GB heap)       |
+| `npm run build`     | Production build                                  |
+| `npm run start`     | Serve the production build                        |
+| `npm run lint`      | ESLint                                            |
+| `npm run lint:fix`  | ESLint with autofix                               |
+| `npm run format`    | Prettier write                                    |
+| `npm run typecheck` | TypeScript, no emit                               |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/                 # Next.js App Router
+│   ├── (app)/           # Authenticated app surface (header + footer layout)
+│   ├── inspire/         # Public inspiration page
+│   ├── wishlists/       # Public wishlist viewer
+│   └── auth/            # Login / signup / callbacks
+├── components/
+│   ├── auth/            # ProfilePanel, ProfileSettingsClient, ...
+│   ├── friends/         # FriendsDrawer, suggestions, requests
+│   ├── wishlist/        # WishlistCard, AddWishModal, ...
+│   ├── inspire/         # TrendingCard, InspireTabs, AIGiftFinder
+│   ├── help/            # HelpClient
+│   ├── layout/          # Header, Footer, AppHeader
+│   └── ui/              # Button, Input, Select, Modal, Drawer, ...
+├── lib/
+│   ├── actions/         # Server actions (wishes, friends, auth, inspire, ...)
+│   ├── supabase/        # SSR + browser clients
+│   └── countries.ts     # ISO-3166 country list
+├── context/             # React context providers
+└── types/               # Shared TypeScript types
+```
 
-## Deploy on Vercel
+## Author
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Khodor El Jarkas** — [@Khodor-Jarkas](https://github.com/Khodor-Jarkas)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+This project is released for educational and portfolio purposes.

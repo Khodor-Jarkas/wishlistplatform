@@ -23,6 +23,7 @@
 *.pem
 .claude/
 /Extras/
+/supabase/migrations/
 
 # debug
 npm-debug.log*
