@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useUser } from "@/hooks/useUser"
 import { useAuthModal } from "@/context/AuthModalContext"
+import { useAddWishModal } from "@/context/AddWishModalContext"
 import Container from "../ui/Container"
 import Button from "../ui/Button"
 import InspirationsDropdown from "@/components/wishit/InspirationsDropdown"
@@ -16,6 +17,7 @@ import AuthModal from "@/components/auth/AuthModal"
 export default function Header() {
   const { user, profile, loading } = useUser()
   const { openLogin, openSignup }  = useAuthModal()
+  const { open: openAddWish }      = useAddWishModal()
   const [inspOpen, setInspOpen]      = useState(false)
   const [panelOpen, setPanelOpen]    = useState(false)
   const [notifOpen, setNotifOpen]    = useState(false)
@@ -56,7 +58,7 @@ export default function Header() {
 
                 {/* Right actions */}
                 <div className="flex items-center gap-3 shrink-0">
-                  <Button href="/wishlists/new" style={{ fontSize: 12, letterSpacing: "0.05em" }}>
+                  <Button onClick={() => openAddWish()} style={{ fontSize: 12, letterSpacing: "0.05em" }}>
                     ☁ ADD WISH
                   </Button>
 

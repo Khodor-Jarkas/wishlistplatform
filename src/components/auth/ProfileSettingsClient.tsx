@@ -1,7 +1,9 @@
 "use client"
 
 import { useRef, useState, useTransition } from "react"
+import Link from "next/link"
 import { updateProfile, changePassword, deleteAccount } from "@/lib/actions/auth"
+import { toggleCreatorStatus, type CreatorEligibility } from "@/lib/actions/creators"
 import { createClient } from "@/lib/supabase/client"
 import type { Profile } from "@/types"
 import Input from "@/components/ui/Input"
@@ -10,6 +12,7 @@ import Toggle from "@/components/ui/Toggle"
 import Modal from "@/components/ui/Modal"
 import Button from "@/components/ui/Button"
 import { COUNTRIES } from "@/lib/countries"
+import { useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
   .map((m, i) => ({ label: m, value: String(i + 1).padStart(2, "0") }))
@@ -32,11 +35,15 @@ interface Props {
     is_private?: boolean; language?: string
   }
   email: string
+  creatorEligibility: CreatorEligibility | null
 }
 
-export default function ProfileSettingsClient({ profile, email }: Props) {
+export default function ProfileSettingsClient({ profile, email, creatorEligibility }: Props) {
+  const isMobile = useIsMobile()
   const dob = profile.date_of_birth?.split("-") ?? []
   const [isPrivate, setIsPrivate] = useState(profile.is_private ?? false)
+  const [isCreator, setIsCreator] = useState(creatorEligibility?.is_creator ?? false)
+  const [creatorMsg, setCreatorMsg] = useState("")
   const [dobMonth, setDobMonth] = useState(dob[1] ?? "")
   const [dobDay,   setDobDay]   = useState(dob[2] ?? "")
   const [dobYear,  setDobYear]  = useState(dob[0] ?? "")
@@ -98,6 +105,22 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
     })
   }
 
+  function handleCreatorToggle(next: boolean) {
+    setCreatorMsg("")
+    const prev = isCreator
+    setIsCreator(next)
+    startTransition(async () => {
+      const result = await toggleCreatorStatus(next)
+      if (result?.error) {
+        setIsCreator(prev)
+        setCreatorMsg(result.error)
+      } else {
+        setCreatorMsg(next ? "You're now a Creator." : "Creator mode off.")
+        setTimeout(() => setCreatorMsg(""), 3000)
+      }
+    })
+  }
+
   function handlePasswordSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
@@ -113,7 +136,7 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
   )
 
   return (
-    <main style={{ maxWidth: 860, margin: "0 auto", padding: "40px 24px 80px" }}>
+    <main style={{ maxWidth: 860, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "40px 24px 80px" }}>
 
       {/* Avatar + name */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
@@ -161,7 +184,7 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
 
         {/* Personal */}
         {section("Personal")}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
           <Input label="First name" name="first_name" defaultValue={profile.first_name ?? ""} placeholder="First name" />
           <Input label="Last name"  name="last_name"  defaultValue={profile.last_name  ?? ""} placeholder="Last name"  />
         </div>
@@ -175,7 +198,7 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginTop: 16 }}>
           <Select label="Gender" name="gender" options={GENDERS} placeholder="Select gender" defaultValue={profile.gender ?? ""} />
           <Input  label="Email"  name="email"  type="email" value={email} readOnly style={{ background: "#F8FAFC", color: "#64748B" }} />
         </div>
@@ -206,7 +229,7 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
 
         {/* Location */}
         {section("Location")}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
           <Input  label="Zip Code"        name="zip_code" defaultValue={profile.zip_code ?? ""} placeholder="Zip Code" />
           <Select label="Country / Region" name="country"  options={COUNTRIES} defaultValue={profile.country ?? ""} placeholder="Select country" />
         </div>
@@ -220,6 +243,15 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
             description="If you make this account private, only friends will be able to see it."
           />
         </div>
+
+        {/* Creator */}
+        {section("Creator profile")}
+        <CreatorSection
+          eligibility={creatorEligibility}
+          checked={isCreator}
+          onToggle={handleCreatorToggle}
+          message={creatorMsg}
+        />
 
         {/* Language */}
         {section("Language")}
@@ -298,6 +330,77 @@ export default function ProfileSettingsClient({ profile, email }: Props) {
       </Modal>
 
     </main>
+  )
+}
+
+// ── Creator section ──────────────────────────────────────────────
+function CreatorSection({
+  eligibility, checked, onToggle, message,
+}: {
+  eligibility: CreatorEligibility | null
+  checked: boolean
+  onToggle: (next: boolean) => void
+  message: string
+}) {
+  if (!eligibility) {
+    return (
+      <p style={{ fontSize: 13, color: "#94A3B8" }}>
+        Couldn't load Creator status. Refresh the page to try again.
+      </p>
+    )
+  }
+
+  const { eligible, public_wishlist_count, has_avatar, required_public_wishlists } = eligibility
+  const canToggleOn = eligible || checked
+
+  return (
+    <div style={{
+      background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 12,
+      padding: 16,
+    }}>
+      <Toggle
+        checked={checked}
+        onChange={canToggleOn ? onToggle : () => {}}
+        label="Show my profile in Creators"
+        description="Your profile will appear on the Inspiration → Creators page so anyone can discover your public wishlists."
+      />
+
+      {!eligible && !checked && (
+        <div style={{
+          marginTop: 12, padding: "10px 12px",
+          background: "#FEF3C7", borderRadius: 8,
+          fontSize: 12, color: "#78350F", lineHeight: 1.5,
+        }}>
+          <strong style={{ display: "block", marginBottom: 4 }}>
+            Not eligible yet — finish these to unlock:
+          </strong>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {!has_avatar && <li>Upload a profile photo.</li>}
+            {public_wishlist_count < required_public_wishlists && (
+              <li>
+                Create {required_public_wishlists - public_wishlist_count} more
+                public wishlist{required_public_wishlists - public_wishlist_count === 1 ? "" : "s"}
+                {" "}
+                (you have {public_wishlist_count}).
+                {" "}
+                <Link href="/dashboard" style={{ color: "#0F172A", textDecoration: "underline" }}>
+                  Manage wishlists
+                </Link>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {message && (
+        <p style={{
+          marginTop: 10, fontSize: 12,
+          color: message.startsWith("You're") || message.startsWith("Creator mode") ? "#059669" : "#DC2626",
+        }}>
+          {message}
+        </p>
+      )}
+    </div>
   )
 }
 

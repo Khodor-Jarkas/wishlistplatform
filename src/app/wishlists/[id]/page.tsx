@@ -2,9 +2,49 @@ import { createClient } from "@/lib/supabase/server"
 import { notFound, redirect } from "next/navigation"
 import WishlistDetail from "@/components/wishlist/WishlistDetail"
 import type { Wish } from "@/types"
+import type { Metadata } from "next"
 
 interface Props {
   params: Promise<{ id: string }>
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("wishlists")
+    .select("title, description, visibility, cover_image_url, profiles!user_id(first_name, last_name, username)")
+    .eq("id", id)
+    .single()
+
+  if (!data || data.visibility === "private") {
+    return { title: "Wishlist", robots: { index: false } }
+  }
+
+  const profile = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles
+  const ownerName = profile?.first_name
+    ? `${profile.first_name} ${profile.last_name ?? ""}`.trim()
+    : profile?.username ?? "Someone"
+
+  const title = data.title
+  const description = data.description
+    ? data.description
+    : `${ownerName}'s wishlist on Wish It — browse their wishes and reserve a gift.`
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title: `${title} · by ${ownerName}`,
+      description,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} · by ${ownerName}`,
+      description,
+    },
+  }
 }
 
 export default async function WishlistPage({ params }: Props) {

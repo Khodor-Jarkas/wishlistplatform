@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useMemo, useState } from "react"
+import { useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 // ── Topics ────────────────────────────────────────────────────
 const TOPICS = [
@@ -79,6 +80,7 @@ const FAQS: FAQ[] = [
 ]
 
 export default function HelpClient() {
+  const isMobile = useIsMobile()
   const [query, setQuery] = useState("")
   const [openIdx, setOpenIdx] = useState<number | null>(null)
 
@@ -238,8 +240,11 @@ export default function HelpClient() {
         marginTop: 40,
         background: "linear-gradient(135deg, #E0F4FA 0%, #F0F9FF 100%)",
         border: "1px solid #BAE6FD",
-        borderRadius: 16, padding: "28px 28px 24px",
-        display: "grid", gridTemplateColumns: "1fr auto", gap: 20, alignItems: "center",
+        borderRadius: 16, padding: isMobile ? "22px 20px" : "28px 28px 24px",
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
+        gap: isMobile ? 16 : 20,
+        alignItems: "center",
       }}>
         <div>
           <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "#0F172A" }}>

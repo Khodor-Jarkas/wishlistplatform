@@ -12,6 +12,7 @@ import {
   searchUsers,
   fetchSuggestedUsers,
 } from "@/lib/actions/friends"
+import { getCreators, type CreatorCard as CreatorCardData } from "@/lib/actions/creators"
 import { getInitials } from "@/lib/utils"
 import Drawer from "@/components/ui/Drawer"
 import type { Profile } from "@/types"
@@ -40,9 +41,11 @@ export default function FriendsDrawer({ open, onOpen, onClose, currentUserId }: 
   const [incoming, setIncoming]                 = useState<FriendshipRow[]>([])
   const [outgoing, setOutgoing]                 = useState<FriendshipRow[]>([])
   const [suggested, setSuggested]               = useState<Profile[]>([])
+  const [creators, setCreators]                 = useState<CreatorCardData[]>([])
   const [sentIds, setSentIds]                   = useState<Set<string>>(new Set())
   const [loading, setLoading]                   = useState(false)
   const [loadingSuggested, setLoadingSuggested] = useState(false)
+  const [loadingCreators, setLoadingCreators]   = useState(false)
   const [searchQuery, setSearchQuery]           = useState("")
   const [searchResults, setSearchResults]       = useState<Profile[]>([])
   const [removingId, setRemovingId]             = useState<string | null>(null)
@@ -50,11 +53,14 @@ export default function FriendsDrawer({ open, onOpen, onClose, currentUserId }: 
 
   useEffect(() => {
     if (open && currentUserId) fetchFriends()
-  }, [open])
+  }, [open, currentUserId])
 
   useEffect(() => {
     if (open && tab === "suggested" && suggested.length === 0 && !loadingSuggested) {
       loadSuggested()
+    }
+    if (open && tab === "creators" && creators.length === 0 && !loadingCreators) {
+      loadCreators()
     }
   }, [open, tab])
 
@@ -63,7 +69,7 @@ export default function FriendsDrawer({ open, onOpen, onClose, currentUserId }: 
     setLoading(true)
     try {
       const supabase = createClient()
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("friendships")
         .select(
           "*, requester:requester_id(id,username,first_name,last_name,avatar_url), " +
@@ -72,12 +78,14 @@ export default function FriendsDrawer({ open, onOpen, onClose, currentUserId }: 
         .or(`requester_id.eq.${currentUserId},addressee_id.eq.${currentUserId}`)
         .order("created_at", { ascending: false })
 
+      if (error) console.error("[FriendsDrawer] fetchFriends", error)
+
       const all = (data ?? []) as unknown as FriendshipRow[]
       setFriends(all.filter((f) => f.status === "accepted"))
       setIncoming(all.filter((f) => f.status === "pending" && f.addressee_id === currentUserId))
       setOutgoing(all.filter((f) => f.status === "pending" && f.requester_id === currentUserId))
-    } catch {
-      // silently handle
+    } catch (e) {
+      console.error("[FriendsDrawer] fetchFriends threw", e)
     } finally {
       setLoading(false)
     }
@@ -90,6 +98,16 @@ export default function FriendsDrawer({ open, onOpen, onClose, currentUserId }: 
       setSuggested(users)
     } finally {
       setLoadingSuggested(false)
+    }
+  }
+
+  async function loadCreators() {
+    setLoadingCreators(true)
+    try {
+      const list = await getCreators()
+      setCreators(list)
+    } finally {
+      setLoadingCreators(false)
     }
   }
 
@@ -352,7 +370,29 @@ export default function FriendsDrawer({ open, onOpen, onClose, currentUserId }: 
               )}
 
               {/* Creators */}
-              {tab === "creators" && <EmptyState icon="🌟" message="Creator profiles coming soon." />}
+              {tab === "creators" && (
+                loadingCreators
+                  ? <div style={{ padding: "48px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>Loading creators…</div>
+                  : creators.length === 0
+                    ? <EmptyState icon="🌟" message="No Creators yet — check the Inspiration page for updates." />
+                    : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {creators.map((c) => (
+                          <CreatorRow key={c.id} creator={c} onNavigate={onClose} />
+                        ))}
+                        <Link
+                          href="/inspire"
+                          onClick={onClose}
+                          style={{
+                            display: "block", textAlign: "center",
+                            marginTop: 8, padding: "10px 0",
+                            fontSize: 12, fontWeight: 600, color: "#38A3C7",
+                            textDecoration: "none",
+                          }}
+                        >
+                          See all Creators →
+                        </Link>
+                      </div>
+              )}
             </>
           )}
 
@@ -439,6 +479,50 @@ function Avatar({ profile, size }: { profile: Profile; size: number }) {
         ? <img src={profile.avatar_url} alt={profile.username} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         : getInitials(profile)}
     </div>
+  )
+}
+
+function CreatorRow({ creator, onNavigate }: { creator: CreatorCardData; onNavigate: () => void }) {
+  const displayName = creator.first_name
+    ? `${creator.first_name} ${creator.last_name ?? ""}`.trim()
+    : creator.username
+
+  const initials = getInitials({
+    first_name: creator.first_name,
+    last_name: creator.last_name,
+    username: creator.username,
+  })
+
+  return (
+    <Link
+      href={`/users/${creator.username}`}
+      onClick={onNavigate}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        background: "white", borderRadius: 12, padding: "12px 14px",
+        border: "1px solid #F1F5F9", textDecoration: "none",
+      }}
+    >
+      <div style={{
+        width: 38, height: 38, borderRadius: "50%",
+        background: "#38A3C7", flexShrink: 0, overflow: "hidden",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "white", fontWeight: 700, fontSize: 13,
+      }}>
+        {creator.avatar_url
+          ? <img src={creator.avatar_url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          : initials}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{displayName}</p>
+        <p style={{ margin: 0, fontSize: 11, color: "#94A3B8" }}>
+          {creator.public_wishlist_count} wishlist{creator.public_wishlist_count === 1 ? "" : "s"}
+          {" · "}
+          {creator.follower_count} follower{creator.follower_count === 1 ? "" : "s"}
+        </p>
+      </div>
+      <span style={{ fontSize: 16, color: "#CBD5E1", flexShrink: 0 }}>›</span>
+    </Link>
   )
 }
 

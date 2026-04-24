@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import Container from "@/components/ui/Container"
+import EmptyState from "@/components/ui/EmptyState"
 import { getInitials } from "@/lib/utils"
 import type { Activity } from "@/types"
 
@@ -81,18 +82,12 @@ export default async function ActivityPage() {
           </div>
 
           {activities.length === 0 ? (
-            <div style={{
-              textAlign: "center", padding: "80px 24px",
-              background: "white", borderRadius: 20,
-              border: "1px solid #F1F5F9",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
-            }}>
-              <div style={{ fontSize: 52, marginBottom: 16 }}>🌱</div>
-              <p style={{ margin: "0 0 8px", fontWeight: 700, fontSize: 16, color: "#0F172A" }}>Nothing yet</p>
-              <p style={{ margin: 0, fontSize: 14, color: "#94A3B8", lineHeight: 1.6 }}>
-                Add friends to see their wishlists,<br />wishes, and updates here.
-              </p>
-            </div>
+            <EmptyState
+              icon="🌱"
+              title="Nothing yet"
+              description="Add friends to see their wishlists, wishes, and updates here."
+              action={{ label: "Find friends", href: "/friends" }}
+            />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
               {groups.map((group) => (

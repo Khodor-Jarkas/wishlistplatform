@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import Container from "@/components/ui/Container"
+import EmptyState from "@/components/ui/EmptyState"
 import { formatPrice, getInitials } from "@/lib/utils"
 import { unreserveWish, markAsBought, markAsUnbought } from "@/lib/actions/wishes"
 
@@ -65,13 +66,13 @@ export default async function ReservationsPage() {
           </p>
 
           {reservations.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "80px 0", color: "#94A3B8" }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>🎁</div>
-              <p style={{ margin: 0, fontWeight: 600, fontSize: 15, color: "#475569" }}>No reservations yet</p>
-              <p style={{ margin: "8px 0 0", fontSize: 13 }}>
-                Browse a friend&apos;s wishlist and reserve a wish to help out!
-              </p>
-            </div>
+            <EmptyState
+              icon="🎁"
+              title="No reservations yet"
+              description="Browse a friend's wishlist and reserve a wish to help out — it'll show up here so you don't lose track."
+              action={{ label: "Find friends", href: "/friends" }}
+              secondaryAction={{ label: "Discover wishlists", href: "/inspire" }}
+            />
           ) : (
             <>
               {/* ── Active reservations ── */}

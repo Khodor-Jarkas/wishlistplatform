@@ -6,6 +6,7 @@ import { signUpWithEmail, signInWithEmail, setupProfile } from "@/lib/actions/au
 import OAuthButtons from "./OAuthButtons"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
+import { useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 type Step = "method" | "email" | "profile" | "confirm"
 
@@ -34,6 +35,7 @@ function EmailIcon({ dark = false }: { dark?: boolean }) {
 // ── Main modal ───────────────────────────────────────────────
 export default function AuthModal() {
   const { modal, openLogin, openSignup, close } = useAuthModal()
+  const isMobile = useIsMobile()
 
   const [step, setStep]         = useState<Step>("method")
   const [signedUpEmail, setSignedUpEmail] = useState("")
@@ -154,7 +156,7 @@ export default function AuthModal() {
         transform: "translate(-50%, -50%)",
         zIndex: 201, background: "white", borderRadius: 24,
         width: "calc(100% - 32px)", maxWidth: 480,
-        padding: "24px 28px 32px",
+        padding: isMobile ? "20px 20px 28px" : "24px 28px 32px",
         boxShadow: "0 24px 64px rgba(0,0,0,0.2)",
         maxHeight: "90vh", overflowY: "auto",
       }}>
@@ -298,7 +300,7 @@ export default function AuthModal() {
         {/* ── Step: Profile setup (email signup OR post-OAuth) ── */}
         {(step === "profile" || isProfileSetup) && (
           <form onSubmit={handleProfileSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
               <Input label="First name" name="first_name" placeholder="First name" required autoFocus />
               <Input label="Last name"  name="last_name"  placeholder="Last name"  required />
             </div>

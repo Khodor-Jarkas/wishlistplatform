@@ -109,6 +109,7 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -117,6 +118,18 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
+  overflow-x: hidden;
+}
+
+img { max-width: 100%; height: auto; }
+
+/* Make form controls at least 16px on mobile to prevent iOS zoom on focus */
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px !important; }
+}
+
+@media (max-width: 640px) {
+  .container, .container-sm, .container-xs { padding-inline: 1rem; }
 }
 
 /* ============================================================

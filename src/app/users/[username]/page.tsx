@@ -10,7 +10,7 @@ interface Props {
 export default async function UserProfilePage({ params }: Props) {
   const { username } = await params
   const supabase = await createClient()
-  // Auth + profile fetch in parallel
+
   const [{ data: { user } }, { data: profile }] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from("profiles").select("*").eq("username", username).single(),
@@ -20,7 +20,22 @@ export default async function UserProfilePage({ params }: Props) {
 
   const isOwnProfile = user?.id === profile.id
 
-  // Friendship + wishlists in parallel (both depend on profile, neither on each other)
+  // Private profiles: only the owner or accepted friends can view.
+  // Non-friends (including logged-out visitors) get a 404.
+  if (profile.is_private && !isOwnProfile) {
+    if (!user) notFound()
+    const { data: friendship } = await supabase
+      .from("friendships")
+      .select("status")
+      .or(
+        `and(requester_id.eq.${user.id},addressee_id.eq.${profile.id}),` +
+        `and(requester_id.eq.${profile.id},addressee_id.eq.${user.id})`
+      )
+      .eq("status", "accepted")
+      .maybeSingle()
+    if (!friendship) notFound()
+  }
+
   const visibilities = isOwnProfile
     ? ["public", "hidden", "private"]
     : ["public", "hidden"]

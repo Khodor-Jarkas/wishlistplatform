@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
+import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { acceptFriendRequest, declineFriendRequest } from "@/lib/actions/friends"
 import { markAllNotificationsRead } from "@/lib/actions/notifications"
@@ -123,6 +124,7 @@ export default function NotificationBell({ open, onOpen, onClose }: Props) {
                 notification={n}
                 isPending={isPending}
                 onFriendAction={handleFriendAction}
+                onNavigate={onClose}
               />
             ))}
           </div>
@@ -154,16 +156,28 @@ function NotifIcon({ type }: { type: string }) {
 }
 
 // ── Single notification row ──────────────────────────────────
-function NotifRow({ notification: n, isPending, onFriendAction }: {
+function NotifRow({ notification: n, isPending, onFriendAction, onNavigate }: {
   notification: Notification
   isPending: boolean
   onFriendAction: (notifId: string, type: "accept" | "decline", friendshipId: string) => void
+  onNavigate: () => void
 }) {
   const actor = n.actor
   const actorName = actor
     ? (actor.first_name ? `${actor.first_name} ${actor.last_name ?? ""}`.trim() : actor.username) ?? "Someone"
     : "Someone"
   const wishTitle = (n.meta?.wish_title as string | undefined) ?? "a wish"
+  const wishlistIdFromMeta = n.meta?.wishlist_id as string | undefined
+
+  const href = (() => {
+    switch (n.type) {
+      case "friend_request":   return "/friends"
+      case "friend_accepted":  return actor?.username ? `/users/${actor.username}` : "/friends"
+      case "wishlist_followed": return n.target_id ? `/wishlists/${n.target_id}` : null
+      case "wish_reserved":    return wishlistIdFromMeta ? `/wishlists/${wishlistIdFromMeta}` : null
+      default: return null
+    }
+  })()
 
   function renderBody() {
     switch (n.type) {
@@ -172,7 +186,7 @@ function NotifRow({ notification: n, isPending, onFriendAction }: {
           <>
             <p style={textStyle}><strong>{actorName}</strong> sent you a friend request</p>
             {n.target_id && (
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }} onClick={(e) => e.preventDefault()}>
                 <SmallBtn label="Accept"  primary disabled={isPending} onClick={() => onFriendAction(n.id, "accept",  n.target_id!)} />
                 <SmallBtn label="Decline"         disabled={isPending} onClick={() => onFriendAction(n.id, "decline", n.target_id!)} />
               </div>
@@ -190,12 +204,16 @@ function NotifRow({ notification: n, isPending, onFriendAction }: {
     }
   }
 
-  return (
-    <div style={{
-      display: "flex", gap: 14, padding: "16px 20px",
-      borderBottom: "1px solid #F8FAFC",
-      background: n.is_read ? "transparent" : "#F0F9FF",
-    }}>
+  const rowStyle: React.CSSProperties = {
+    display: "flex", gap: 14, padding: "16px 20px",
+    borderBottom: "1px solid #F8FAFC",
+    background: n.is_read ? "transparent" : "#F0F9FF",
+    textDecoration: "none", color: "inherit",
+    cursor: href ? "pointer" : "default",
+  }
+
+  const inner = (
+    <>
       <NotifIcon type={n.type} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {renderBody()}
@@ -204,7 +222,15 @@ function NotifRow({ notification: n, isPending, onFriendAction }: {
       {!n.is_read && (
         <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#38A3C7", flexShrink: 0, marginTop: 6 }} />
       )}
-    </div>
+    </>
+  )
+
+  return href ? (
+    <Link href={href} style={rowStyle} onClick={onNavigate}>
+      {inner}
+    </Link>
+  ) : (
+    <div style={rowStyle}>{inner}</div>
   )
 }
 

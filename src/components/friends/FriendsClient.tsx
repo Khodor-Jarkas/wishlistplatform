@@ -12,6 +12,7 @@ import {
 } from "@/lib/actions/friends"
 import { getInitials } from "@/lib/utils"
 import Container from "@/components/ui/Container"
+import EmptyState from "@/components/ui/EmptyState"
 import type { Profile } from "@/types"
 
 interface FriendshipRow {
@@ -157,9 +158,12 @@ export default function FriendsClient({
           <section style={{ marginBottom: 40 }}>
             <SectionLabel label={`My Friends (${friends.length})`} />
             {friends.length === 0 ? (
-              <p style={{ fontSize: 14, color: "#94A3B8", textAlign: "center", padding: "32px 0" }}>
-                No friends yet — search above to find people!
-              </p>
+              <EmptyState
+                compact
+                icon="👋"
+                title="No friends yet"
+                description="Use the search above to find people by username, or send a link to your profile to connect."
+              />
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {friends.map((f) => {

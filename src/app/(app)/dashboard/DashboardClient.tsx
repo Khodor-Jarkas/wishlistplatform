@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import Container from "@/components/ui/Container"
+import EmptyState from "@/components/ui/EmptyState"
 import WishlistGrid from "@/components/wishlist/WishlistGrid"
 import CreateWishlistModal from "@/components/wishlist/CreateWishlistModal"
 import type { WishlistWithCounts } from "@/components/wishlist/WishlistCard"
@@ -155,12 +156,23 @@ export default function DashboardClient({
             </button>
           </div>
 
-          <WishlistGrid
-            wishlists={wishlists}
-            isOwner
-            showCreateCard
-            onCreateClick={() => setShowModal(true)}
-          />
+          {wishlists.length === 0 ? (
+            <EmptyState
+              variant="dashed"
+              icon="🎁"
+              title="Create your first wishlist"
+              description="Add wishes, share with friends, and never get a bad gift again."
+              action={{ label: "Create a Wishlist", onClick: () => setShowModal(true) }}
+              secondaryAction={{ label: "Browse inspiration", href: "/inspire" }}
+            />
+          ) : (
+            <WishlistGrid
+              wishlists={wishlists}
+              isOwner
+              showCreateCard
+              onCreateClick={() => setShowModal(true)}
+            />
+          )}
 
           {/* ── Followed Lists ── */}
           {followedLists.length > 0 && (
@@ -177,36 +189,6 @@ export default function DashboardClient({
               </div>
               <WishlistGrid wishlists={followedLists} isOwner={false} showOwner />
             </>
-          )}
-
-          {/* ── Empty state ── */}
-          {wishlists.length === 0 && (
-            <div style={{
-              marginTop: 8,
-              padding: "48px 24px",
-              background: "white", borderRadius: 20,
-              border: "2px dashed #E2E8F0",
-              textAlign: "center",
-            }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>🎁</div>
-              <h3 style={{ fontSize: 17, fontWeight: 700, color: "#0F172A", margin: "0 0 8px" }}>
-                Create your first wishlist
-              </h3>
-              <p style={{ fontSize: 14, color: "#94A3B8", margin: "0 0 24px" }}>
-                Add wishes, share with friends, and never get a bad gift again.
-              </p>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  padding: "12px 28px", borderRadius: 10,
-                  background: "#38A3C7", color: "white",
-                  border: "none", cursor: "pointer",
-                  fontSize: 14, fontWeight: 700,
-                }}
-              >
-                Create a Wishlist
-              </button>
-            </div>
           )}
 
         </div>

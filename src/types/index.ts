@@ -16,6 +16,7 @@ export interface Profile {
   zip_code: string | null
   country: string | null
   is_private: boolean
+  is_creator: boolean
   language: string
   created_at: string
   updated_at: string

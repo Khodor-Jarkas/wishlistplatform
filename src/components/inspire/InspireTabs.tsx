@@ -2,15 +2,19 @@
 
 import { useState } from "react"
 import TrendingCard from "./TrendingCard"
+import CreatorCard from "./CreatorCard"
+import EmptyState from "@/components/ui/EmptyState"
 import type { TrendingWishlist } from "@/lib/actions/inspire"
+import type { CreatorCard as CreatorCardData } from "@/lib/actions/creators"
 
 type Tab = "wishlists" | "creators"
 
 interface Props {
   wishlists: TrendingWishlist[]
+  creators: CreatorCardData[]
 }
 
-export default function InspireTabs({ wishlists }: Props) {
+export default function InspireTabs({ wishlists, creators }: Props) {
   const [tab, setTab] = useState<Tab>("wishlists")
 
   return (
@@ -45,9 +49,12 @@ export default function InspireTabs({ wishlists }: Props) {
           </div>
 
           {wishlists.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 0", color: "#94A3B8" }}>
-              <p style={{ margin: 0 }}>No public wishlists yet. Be the first to share yours!</p>
-            </div>
+            <EmptyState
+              icon="✨"
+              title="No public wishlists yet"
+              description="Be the first to share yours! Set a wishlist's visibility to Public and it'll appear here for everyone to see."
+              action={{ label: "Create a wishlist", href: "/dashboard" }}
+            />
           ) : (
             <div style={{
               display: "grid",
@@ -60,9 +67,45 @@ export default function InspireTabs({ wishlists }: Props) {
         </>
       )}
 
-      {/* Creators — skeleton / coming soon */}
-      {tab === "creators" && <CreatorsSkeleton />}
+      {/* Creators */}
+      {tab === "creators" && <CreatorsGrid creators={creators} />}
     </section>
+  )
+}
+
+function CreatorsGrid({ creators }: { creators: CreatorCardData[] }) {
+  return (
+    <>
+      <div style={{
+        display: "flex", alignItems: "baseline", justifyContent: "space-between",
+        marginBottom: 24, flexWrap: "wrap", gap: 8,
+      }}>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0F172A" }}>
+          Featured Creators
+        </h2>
+        <span style={{ fontSize: 13, color: "#94A3B8" }}>
+          {creators.length} creator{creators.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      {creators.length === 0 ? (
+        <EmptyState
+          icon="🌟"
+          title="No Creators yet"
+          description="Creators are users who share their wishlists publicly for inspiration. Turn on Creator mode in your profile settings once you have 2+ public wishlists."
+          action={{ label: "Profile settings", href: "/profile" }}
+        />
+      ) : (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+          gap: 20,
+          rowGap: 40,
+        }}>
+          {creators.map((c) => <CreatorCard key={c.id} creator={c} />)}
+        </div>
+      )}
+    </>
   )
 }
 
@@ -87,69 +130,3 @@ function TabButton({
   )
 }
 
-function CreatorsSkeleton() {
-  return (
-    <>
-      <div style={{
-        display: "flex", alignItems: "baseline", justifyContent: "space-between",
-        marginBottom: 24, flexWrap: "wrap", gap: 8,
-      }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#0F172A" }}>
-          Featured Creators
-        </h2>
-        <span style={{
-          fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
-          color: "#38A3C7", background: "#E0F4FA",
-          padding: "4px 10px", borderRadius: 20,
-        }}>
-          COMING SOON
-        </span>
-      </div>
-
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-        gap: 20,
-      }}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} style={{
-            background: "white", border: "1px solid #E2E8F0",
-            borderRadius: 14, padding: 20, opacity: 0.75,
-          }}>
-            {/* Avatar placeholder */}
-            <div style={{
-              width: 72, height: 72, borderRadius: "50%",
-              background: "linear-gradient(135deg, #E2E8F0, #CBD5E1)",
-              margin: "0 auto 14px",
-            }} />
-            {/* Name placeholder */}
-            <div style={{
-              height: 14, width: "60%", margin: "0 auto 8px",
-              background: "#E2E8F0", borderRadius: 4,
-            }} />
-            {/* Handle placeholder */}
-            <div style={{
-              height: 11, width: "40%", margin: "0 auto 16px",
-              background: "#F1F5F9", borderRadius: 4,
-            }} />
-            {/* Stats */}
-            <div style={{
-              display: "flex", justifyContent: "center", gap: 12,
-              fontSize: 12, color: "#94A3B8",
-            }}>
-              <span>— followers</span>
-              <span>— wishlists</span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <p style={{
-        textAlign: "center", marginTop: 32,
-        fontSize: 13, color: "#64748B", maxWidth: 440, marginLeft: "auto", marginRight: "auto",
-      }}>
-        Follow curated creators who share their favorite gift picks, themed wishlists, and seasonal inspiration. Launching soon.
-      </p>
-    </>
-  )
-}

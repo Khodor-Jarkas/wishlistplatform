@@ -1,19 +1,19 @@
-import Header from "@/components/layout/Header"
-import Footer from "@/components/layout/Footer"
 import Container from "@/components/ui/Container"
 import { getTrendingWishlists } from "@/lib/actions/inspire"
+import { getCreators } from "@/lib/actions/creators"
 import AIGiftFinder from "@/components/inspire/AIGiftFinder"
 import InspireTabs from "@/components/inspire/InspireTabs"
 
 export const metadata = { title: "Inspiration" }
 
 export default async function InspirePage() {
-  const wishlists = await getTrendingWishlists()
+  const [wishlists, creators] = await Promise.all([
+    getTrendingWishlists(),
+    getCreators(),
+  ])
 
   return (
     <>
-      <Header />
-
       <main style={{ minHeight: "100vh", background: "#F8FAFC", paddingBottom: 80 }}>
 
         {/* Hero */}
@@ -47,7 +47,7 @@ export default async function InspirePage() {
 
         <Container>
 
-          <InspireTabs wishlists={wishlists} />
+          <InspireTabs wishlists={wishlists} creators={creators} />
 
           {/* AI Gift Finder */}
           <section style={{ paddingTop: 64 }}>
@@ -56,8 +56,6 @@ export default async function InspirePage() {
 
         </Container>
       </main>
-
-      <Footer />
     </>
   )
 }

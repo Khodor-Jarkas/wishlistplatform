@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { createWish, scrapeProductUrl } from "@/lib/actions/wishes"
 import { useAddWishModal } from "@/context/AddWishModalContext"
+import { useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 const CURRENCIES = ["USD", "EUR", "GBP", "LBP", "AED", "SAR"]
 
@@ -11,6 +12,7 @@ interface Wishlist { id: string; title: string }
 
 export default function AddWishModal() {
   const { isOpen, close, defaultWishlistId } = useAddWishModal()
+  const isMobile = useIsMobile()
 
   const [step, setStep]                 = useState<"link" | "manual">("link")
   const [wishlists, setWishlists]       = useState<Wishlist[]>([])
@@ -285,8 +287,8 @@ export default function AddWishModal() {
 
         {/* ── Step 2: Manual form ── */}
         {step === "manual" && (
-          <form onSubmit={handleSubmit} style={{ padding: "20px 24px 28px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28 }}>
+          <form onSubmit={handleSubmit} style={{ padding: isMobile ? "20px 20px 24px" : "20px 24px 28px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 18 : 28 }}>
 
               {/* Left column */}
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

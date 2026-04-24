@@ -6,6 +6,7 @@ import { updateWishlist } from "@/lib/actions/wishlists"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import { WISHLIST_COLOR_PRESETS } from "./WishlistCard"
+import { useIsMobile } from "@/lib/hooks/useMediaQuery"
 import type { Wishlist } from "@/types"
 
 const OCCASIONS = [
@@ -36,6 +37,7 @@ interface Props {
 }
 
 export default function EditWishlistModal({ wishlist, onClose }: Props) {
+  const isMobile = useIsMobile()
   const [selectedType, setSelectedType] = useState(wishlist.type)
   const [selectedVisibility, setSelectedVisibility] = useState(wishlist.visibility)
   const [coverUrl, setCoverUrl] = useState(wishlist.cover_image_url ?? "")
@@ -299,7 +301,7 @@ export default function EditWishlistModal({ wishlist, onClose }: Props) {
           </div>
 
           {/* Occasion + Event Date */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 24 }}>
             <Select
               label="Occasion"
               name="occasion"

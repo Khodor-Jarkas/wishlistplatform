@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { updateWish } from "@/lib/actions/wishes"
+import { useIsMobile } from "@/lib/hooks/useMediaQuery"
 import type { Wish } from "@/types"
 
 const CURRENCIES = ["USD", "EUR", "GBP", "LBP", "AED", "SAR"]
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function EditWishModal({ wish, wishlistId, onClose }: Props) {
+  const isMobile = useIsMobile()
   const [isMostWanted, setIsMostWanted] = useState(wish.priority === 2)
   const [currency, setCurrency]         = useState(wish.currency || "USD")
   const [quantity, setQuantity]         = useState(wish.quantity ?? 1)
@@ -102,8 +104,8 @@ export default function EditWishModal({ wish, wishlistId, onClose }: Props) {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: "20px 24px 28px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28 }}>
+        <form onSubmit={handleSubmit} style={{ padding: isMobile ? "20px 20px 24px" : "20px 24px 28px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 18 : 28 }}>
 
             {/* Left column */}
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
