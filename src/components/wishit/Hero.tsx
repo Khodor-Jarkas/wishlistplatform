@@ -1,14 +1,17 @@
 "use client"
 
 import { useAuthModal } from "@/context/AuthModalContext"
+import { useIsTablet, useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 export default function Hero() {
   const { openSignup } = useAuthModal()
+  const isTablet = useIsTablet()
+  const isMobile = useIsMobile()
 
   return (
     <section style={{
       background: "linear-gradient(135deg, #1E8FAD 0%, #38A3C7 50%, #4DBBD6 100%)",
-      minHeight: "92vh",
+      minHeight: isMobile ? "auto" : "92vh",
       display: "flex",
       alignItems: "center",
       overflow: "hidden",
@@ -22,13 +25,16 @@ export default function Hero() {
       </div>
 
       <div style={{
-        maxWidth: 1200, margin: "0 auto", padding: "80px 32px",
-        display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64,
+        maxWidth: 1200, margin: "0 auto",
+        padding: isMobile ? "56px 20px" : "80px 32px",
+        display: "grid",
+        gridTemplateColumns: isTablet ? "1fr" : "1fr 1fr",
+        gap: isTablet ? 48 : 64,
         alignItems: "center", width: "100%", position: "relative",
       }}>
 
         {/* ── Left: copy ── */}
-        <div style={{ color: "white" }}>
+        <div style={{ color: "white", textAlign: isTablet ? "center" : "left" }}>
           <span style={{
             display: "inline-block", marginBottom: 20,
             fontSize: 11, fontWeight: 700, letterSpacing: "0.14em",
@@ -46,11 +52,18 @@ export default function Hero() {
             All your wishes<br />in one place
           </h1>
 
-          <p style={{ fontSize: 18, opacity: 0.88, lineHeight: 1.7, maxWidth: 440, marginBottom: 40 }}>
+          <p style={{
+            fontSize: 18, opacity: 0.88, lineHeight: 1.7,
+            maxWidth: 440, marginBottom: 40,
+            marginLeft: isTablet ? "auto" : 0, marginRight: isTablet ? "auto" : 0,
+          }}>
             Wish It makes it easy for you to save and share all your wishes with friends and family — no more guessing, no more duplicate gifts.
           </p>
 
-          <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{
+            display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap",
+            justifyContent: isTablet ? "center" : "flex-start",
+          }}>
             <button
               onClick={openSignup}
               style={{
@@ -70,14 +83,21 @@ export default function Hero() {
           </div>
 
           {/* Trust stats */}
-          <div style={{ display: "flex", gap: 40, marginTop: 56, paddingTop: 32, borderTop: "1px solid rgba(255,255,255,0.2)" }}>
+          <div style={{
+            display: "flex",
+            gap: isMobile ? 20 : 40,
+            marginTop: 56, paddingTop: 32,
+            borderTop: "1px solid rgba(255,255,255,0.2)",
+            justifyContent: isTablet ? "center" : "flex-start",
+            flexWrap: "wrap",
+          }}>
             {[
               { value: "10K+", label: "Wishlists created" },
               { value: "50K+", label: "Wishes saved" },
               { value: "100%", label: "Free to use" },
             ].map(({ value, label }) => (
               <div key={label}>
-                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em" }}>{value}</div>
+                <div style={{ fontSize: isMobile ? 22 : 26, fontWeight: 800, letterSpacing: "-0.02em" }}>{value}</div>
                 <div style={{ fontSize: 13, opacity: 0.75, marginTop: 2 }}>{label}</div>
               </div>
             ))}
@@ -85,7 +105,8 @@ export default function Hero() {
         </div>
 
         {/* ── Right: floating wishlist preview ── */}
-        <div style={{ position: "relative", height: 480, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {!isMobile && (
+        <div style={{ position: "relative", height: isTablet ? 420 : 480, display: "flex", alignItems: "center", justifyContent: "center" }}>
 
           {/* Main card */}
           <div style={{
@@ -181,6 +202,7 @@ export default function Hero() {
           </div>
 
         </div>
+        )}
       </div>
     </section>
   )

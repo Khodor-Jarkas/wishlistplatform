@@ -6,6 +6,7 @@ import AuthPageLayout from "@/components/auth/AuthPageLayout"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import Button from "@/components/ui/Button"
+import { useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -23,6 +24,7 @@ const GENDERS = [
 ]
 
 export default function ProfileSetupPage() {
+  const isMobile = useIsMobile()
   const [month, setMonth] = useState("")
   const [day,   setDay]   = useState("")
   const [year,  setYear]  = useState("")
@@ -49,7 +51,7 @@ export default function ProfileSetupPage() {
     <AuthPageLayout title="Create Account">
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
           <Input label="First Name" name="first_name" placeholder="First Name" required />
           <Input label="Last Name"  name="last_name"  placeholder="Last Name"  required />
         </div>

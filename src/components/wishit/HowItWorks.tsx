@@ -1,6 +1,7 @@
 "use client"
 
 import { useAuthModal } from "@/context/AuthModalContext"
+import { useIsTablet, useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 const steps = [
   {
@@ -31,14 +32,16 @@ const steps = [
 
 export default function HowItWorks() {
   const { openSignup } = useAuthModal()
+  const isTablet = useIsTablet()
+  const isMobile = useIsMobile()
 
   return (
     <>
       {/* ── How it works ── */}
-      <section style={{ padding: "100px 0 80px", background: "white" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 32px" }}>
+      <section style={{ padding: isMobile ? "64px 0 48px" : "100px 0 80px", background: "white" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0 20px" : "0 32px" }}>
 
-          <div style={{ textAlign: "center", marginBottom: 80 }}>
+          <div style={{ textAlign: "center", marginBottom: isMobile ? 48 : 80 }}>
             <span style={{
               display: "inline-block", marginBottom: 16,
               fontSize: 11, fontWeight: 700, letterSpacing: "0.14em",
@@ -52,16 +55,16 @@ export default function HowItWorks() {
             </h2>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 100 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 56 : 100 }}>
             {steps.map((step) => (
               <div
                 key={step.title}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 72,
+                  gridTemplateColumns: isTablet ? "1fr" : "1fr 1fr",
+                  gap: isTablet ? 28 : 72,
                   alignItems: "center",
-                  direction: step.flip ? "rtl" : "ltr",
+                  direction: isTablet ? "ltr" : step.flip ? "rtl" : "ltr",
                 }}
               >
                 {/* Illustration */}
@@ -69,7 +72,7 @@ export default function HowItWorks() {
                   direction: "ltr",
                   background: "linear-gradient(135deg, #F8FAFC, #F1F5F9)",
                   borderRadius: 24,
-                  height: 340,
+                  height: isMobile ? 260 : 340,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   border: "1px solid #E2E8F0",
                   overflow: "hidden",
@@ -79,14 +82,14 @@ export default function HowItWorks() {
                 </div>
 
                 {/* Text */}
-                <div style={{ direction: "ltr" }}>
+                <div style={{ direction: "ltr", textAlign: isTablet ? "center" : "left" }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: step.accent, letterSpacing: "0.06em" }}>
                     STEP {step.number}
                   </span>
-                  <h3 style={{ fontSize: 28, fontWeight: 800, color: "#0F172A", margin: "12px 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+                  <h3 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 800, color: "#0F172A", margin: "12px 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
                     {step.title}
                   </h3>
-                  <p style={{ color: "#475569", lineHeight: 1.75, fontSize: 16, margin: 0 }}>
+                  <p style={{ color: "#475569", lineHeight: 1.75, fontSize: isMobile ? 15 : 16, margin: 0 }}>
                     {step.description}
                   </p>
                 </div>
@@ -99,7 +102,8 @@ export default function HowItWorks() {
       {/* ── CTA Banner ── */}
       <section style={{
         background: "linear-gradient(135deg, #1E8FAD, #38A3C7)",
-        padding: "80px 32px", textAlign: "center", color: "white",
+        padding: isMobile ? "56px 20px" : "80px 32px",
+        textAlign: "center", color: "white",
       }}>
         <h2 style={{ fontSize: "clamp(26px, 4vw, 40px)", fontWeight: 800, marginBottom: 16, letterSpacing: "-0.02em" }}>
           Ready to make gifting easy?

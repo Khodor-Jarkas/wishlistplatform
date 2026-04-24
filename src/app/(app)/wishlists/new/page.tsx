@@ -7,6 +7,7 @@ import { createWishlist } from "@/lib/actions/wishlists"
 import Container from "@/components/ui/Container"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
+import { useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 const OCCASIONS = [
   { label: "Birthday", value: "birthday" },
@@ -31,6 +32,7 @@ const VISIBILITIES = [
 ]
 
 export default function NewWishlistPage() {
+  const isMobile = useIsMobile()
   const [selectedType, setSelectedType] = useState("personal")
   const [selectedVisibility, setSelectedVisibility] = useState("public")
   const [coverUrl, setCoverUrl] = useState("")
@@ -84,7 +86,7 @@ export default function NewWishlistPage() {
   }
 
   const selectorBtn = (active: boolean): React.CSSProperties => ({
-    padding: "14px 10px",
+    padding: isMobile ? "12px 6px" : "14px 10px",
     borderRadius: 10,
     textAlign: "center",
     border: active ? "2px solid #38A3C7" : "2px solid #E2E8F0",
@@ -206,7 +208,7 @@ export default function NewWishlistPage() {
                   >
                     <div style={{ fontSize: 22, marginBottom: 4 }}>{t.icon}</div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{t.label}</div>
-                    <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{t.desc}</div>
+                    {!isMobile && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{t.desc}</div>}
                   </button>
                 ))}
               </div>
@@ -229,7 +231,7 @@ export default function NewWishlistPage() {
                   >
                     <div style={{ fontSize: 22, marginBottom: 4 }}>{v.icon}</div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{v.label}</div>
-                    <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{v.desc}</div>
+                    {!isMobile && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{v.desc}</div>}
                   </button>
                 ))}
               </div>
@@ -271,7 +273,7 @@ export default function NewWishlistPage() {
             </div>
 
             {/* Occasion + Event Date */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 36 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 36 }}>
               <Select
                 label="Occasion"
                 name="occasion"

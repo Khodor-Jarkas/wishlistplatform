@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useIsTablet, useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 const InstagramIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -37,12 +38,23 @@ const links = {
 }
 
 export default function Footer() {
+  const isTablet = useIsTablet()
+  const isMobile = useIsMobile()
+
   return (
     <footer style={{ background: "#0F172A", color: "white" }}>
 
       {/* ── Main content ── */}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "72px 32px 56px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 48, alignItems: "flex-start" }}>
+      <div style={{
+        maxWidth: 1200, margin: "0 auto",
+        padding: isMobile ? "48px 20px 36px" : "72px 32px 56px",
+      }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : isTablet ? "1fr 1fr" : "2fr 1fr 1fr 1fr",
+          gap: isMobile ? 32 : 48,
+          alignItems: "flex-start",
+        }}>
 
           {/* Brand column */}
           <div>
@@ -118,14 +130,17 @@ export default function Footer() {
       {/* ── Bottom bar ── */}
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
         <div style={{
-          maxWidth: 1200, margin: "0 auto", padding: "20px 32px",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          flexWrap: "wrap", gap: 12,
+          maxWidth: 1200, margin: "0 auto",
+          padding: isMobile ? "16px 20px" : "20px 32px",
+          display: "flex", alignItems: "center",
+          justifyContent: isMobile ? "center" : "space-between",
+          flexWrap: "wrap", gap: isMobile ? 8 : 12,
+          textAlign: isMobile ? "center" : "left",
         }}>
           <p style={{ fontSize: 13, color: "#475569", margin: 0 }}>
             © {new Date().getFullYear()} Wish It. All rights reserved.
           </p>
-          <div style={{ display: "flex", gap: 24 }}>
+          <div style={{ display: "flex", gap: isMobile ? 14 : 24, flexWrap: "wrap", justifyContent: "center" }}>
             {["Privacy Policy", "Terms of Service", "Cookie Settings"].map((item) => (
               <a
                 key={item}
