@@ -19,8 +19,6 @@ const YEARS = Array.from({ length: 100 }, (_, i) => { const y = new Date().getFu
 const GENDERS = [
   { label: "Male",                value: "male"              },
   { label: "Female",              value: "female"            },
-  { label: "Non-binary",          value: "non_binary"        },
-  { label: "Prefer not to say",   value: "prefer_not_to_say" },
 ]
 
 export default function ProfileSetupPage() {
