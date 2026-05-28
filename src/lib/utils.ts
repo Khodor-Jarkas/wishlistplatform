@@ -56,6 +56,53 @@ export function timeAgo(dateStr: string): string {
 }
 
 /**
+ * Format a profile name for display.
+ * Priority: first+last → full_name → username → fallback
+ */
+export function getDisplayName(
+  profile: {
+    first_name?: string | null
+    last_name?:  string | null
+    full_name?:  string | null
+    username?:   string | null
+  } | null | undefined,
+  fallback = "Someone"
+): string {
+  if (!profile) return fallback
+  if (profile.first_name) return `${profile.first_name} ${profile.last_name ?? ""}`.trim()
+  if (profile.full_name)  return profile.full_name
+  return profile.username ?? fallback
+}
+
+/**
+ * Group a date string into a human-readable bucket label.
+ * e.g. "Today", "Yesterday", "This week", "April 15"
+ */
+export function getDateLabel(dateStr: string): string {
+  const d         = new Date(dateStr)
+  const now       = new Date()
+  const today     = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today.getTime() - 86_400_000)
+  const weekAgo   = new Date(today.getTime() - 7 * 86_400_000)
+  const item      = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  if (item.getTime() === today.getTime())     return "Today"
+  if (item.getTime() === yesterday.getTime()) return "Yesterday"
+  if (item.getTime() >  weekAgo.getTime())    return "This week"
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric" })
+}
+
+/**
+ * Returns the static JPEG URL for an avatar.
+ * When a user uploads a GIF, we store avatar.gif (animated) in avatar_url
+ * and a first-frame JPEG at avatar.jpg. Non-dashboard displays call this
+ * to get the static version; the dashboard uses avatar_url directly.
+ */
+export function staticAvatarUrl(url: string | null | undefined): string | null | undefined {
+  if (!url) return url
+  return url.replace(/(\/avatar)\.gif(\?.*)?$/, (_, base, qs) => `${base}.jpg${qs ?? ""}`)
+}
+
+/**
  * Generate a URL-safe slug from a string.
  * e.g. slugify("My Birthday 2025!") → "my-birthday-2025"
  */

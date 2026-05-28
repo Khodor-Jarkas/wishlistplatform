@@ -45,7 +45,7 @@ export async function acceptFriendRequest(friendshipId: string) {
 
   const { data: friendship, error: fetchErr } = await supabase
     .from("friendships")
-    .select("*")
+    .select("id, requester_id")
     .eq("id", friendshipId)
     .eq("addressee_id", user.id)
     .eq("status", "pending")
@@ -85,10 +85,11 @@ export async function acceptFriendRequest(friendshipId: string) {
     },
   ])
 
-  // Mark the originating friend_request notification as read
+  // Change the friend_request notification to friend_accepted so it no longer
+  // shows Accept/Decline buttons after the request has been handled.
   await supabase
     .from("notifications")
-    .update({ is_read: true })
+    .update({ type: "friend_accepted", is_read: true })
     .eq("user_id", user.id)
     .eq("type", "friend_request")
     .eq("actor_id", friendship.requester_id)
@@ -193,7 +194,7 @@ export async function fetchSuggestedUsers(): Promise<{ users: Profile[] }> {
     if (candidateIds.length > 0) {
       const { data } = await supabase
         .from("profiles")
-        .select("id, username, first_name, last_name, full_name, avatar_url, bio, country, is_private, language, date_of_birth, gender, phone, zip_code, created_at, updated_at")
+        .select("id, username, first_name, last_name, full_name, avatar_url, bio, country, is_private, language, date_of_birth, gender, created_at, updated_at")
         .in("id", candidateIds)
         .eq("is_private", false)
         .limit(10)
@@ -201,22 +202,30 @@ export async function fetchSuggestedUsers(): Promise<{ users: Profile[] }> {
     }
   }
 
-  // Fallback: same country or just recent users
+  // Fallback: same country, then global — always excluding existing connections
   const { data: myProfile } = await supabase
     .from("profiles").select("country").eq("id", user.id).single()
 
-  let query = supabase
+  // Exclude all known connections (cap at 50 to stay under URL limits)
+  const excludeIds = [...knownIds].slice(0, 50)
+
+  const baseQuery = () => supabase
     .from("profiles")
-    .select("id, username, first_name, last_name, full_name, avatar_url, bio, country, is_private, language, date_of_birth, gender, phone, zip_code, created_at, updated_at")
-    .neq("id", user.id)
+    .select("id, username, first_name, last_name, full_name, avatar_url, bio, country, is_private, language, date_of_birth, gender, created_at, updated_at")
+    .not("id", "in", `(${excludeIds.join(",")})`)
     .eq("is_private", false)
     .limit(10)
 
+  // Try same-country suggestions first
   if (myProfile?.country) {
-    query = query.eq("country", myProfile.country)
+    const { data: countryData } = await baseQuery()
+      .eq("country", myProfile.country)
+      .order("created_at", { ascending: false })
+    if (countryData && countryData.length > 0) return { users: countryData as Profile[] }
   }
 
-  const { data } = await query.order("created_at", { ascending: false })
+  // Fall through to global suggestions when country returns nothing
+  const { data } = await baseQuery().order("created_at", { ascending: false })
   return { users: (data as Profile[]) ?? [] }
 }
 
@@ -230,7 +239,7 @@ export async function searchUsers(query: string): Promise<{ users: Profile[]; er
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("*")
+    .select("id, username, first_name, last_name, full_name, avatar_url, bio, country, is_private, language, date_of_birth, gender, created_at, updated_at")
     .neq("id", user.id)
     .or(
       `username.ilike.%${q}%,` +

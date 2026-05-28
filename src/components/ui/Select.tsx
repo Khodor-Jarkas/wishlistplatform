@@ -34,7 +34,7 @@ export default function Select({ label, error, options, placeholder, className =
             padding: "12px 36px 12px 14px",
             border: error ? "1px solid #EF4444" : "1px solid #E2E8F0",
             borderRadius: 8,
-            fontSize: 14,
+            fontSize: 16, // 16px prevents Android Chrome auto-zoom on focus
             color: isSelected ? "#0F172A" : "#94A3B8",
             background: "white",
             appearance: "none",

@@ -10,7 +10,7 @@ import {
   sendFriendRequest,
   searchUsers,
 } from "@/lib/actions/friends"
-import { getInitials } from "@/lib/utils"
+import { getInitials, staticAvatarUrl } from "@/lib/utils"
 import Container from "@/components/ui/Container"
 import EmptyState from "@/components/ui/EmptyState"
 import type { Profile } from "@/types"
@@ -304,7 +304,7 @@ function Avatar({ profile, size }: { profile: Profile; size: number }) {
       color: "white", fontWeight: 700, fontSize: size * 0.35,
     }}>
       {profile.avatar_url
-        ? <img src={profile.avatar_url} alt={profile.username} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ? <img src={staticAvatarUrl(profile.avatar_url)!} alt={profile.username} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         : initials}
     </div>
   )

@@ -24,6 +24,7 @@ export default function Modal({ open, onClose, title, children, maxWidth = 480 }
   return (
     <div
       onClick={onClose}
+      className="wi-anim-fade"
       style={{
         position: "fixed",
         inset: 0,
@@ -37,11 +38,14 @@ export default function Modal({ open, onClose, title, children, maxWidth = 480 }
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="wi-anim-modal"
         style={{
           background: "white",
           borderRadius: 16,
           width: "100%",
           maxWidth,
+          maxHeight: "90vh",
+          overflowY: "auto",
           padding: 32,
           position: "relative",
         }}

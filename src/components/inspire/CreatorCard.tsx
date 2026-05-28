@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { getInitials } from "@/lib/utils"
+import { getInitials, staticAvatarUrl } from "@/lib/utils"
 import { WISHLIST_COLOR_PRESETS } from "@/components/wishlist/WishlistCard"
 import type { CreatorCard as CreatorCardData } from "@/lib/actions/creators"
 
@@ -90,7 +90,7 @@ export default function CreatorCard({ creator }: { creator: CreatorCardData }) {
             boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
           }}>
             {creator.avatar_url
-              ? <img src={creator.avatar_url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ? <img src={staticAvatarUrl(creator.avatar_url)!} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               : initials}
           </div>
 

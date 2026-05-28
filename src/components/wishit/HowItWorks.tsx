@@ -1,7 +1,6 @@
 "use client"
 
 import { useAuthModal } from "@/context/AuthModalContext"
-import { useIsTablet, useIsMobile } from "@/lib/hooks/useMediaQuery"
 
 const steps = [
   {
@@ -32,16 +31,14 @@ const steps = [
 
 export default function HowItWorks() {
   const { openSignup } = useAuthModal()
-  const isTablet = useIsTablet()
-  const isMobile = useIsMobile()
 
   return (
     <>
-      {/* ── How it works ── */}
-      <section style={{ padding: isMobile ? "64px 0 48px" : "100px 0 80px", background: "white" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0 20px" : "0 32px" }}>
+      {/* ── How it works — responsive via CSS classes ── */}
+      <section className="wi-hiw-section">
+        <div className="wi-hiw-inner">
 
-          <div style={{ textAlign: "center", marginBottom: isMobile ? 48 : 80 }}>
+          <div className="wi-hiw-header">
             <span style={{
               display: "inline-block", marginBottom: 16,
               fontSize: 11, fontWeight: 700, letterSpacing: "0.14em",
@@ -55,24 +52,18 @@ export default function HowItWorks() {
             </h2>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 56 : 100 }}>
+          <div className="wi-hiw-steps">
             {steps.map((step) => (
               <div
                 key={step.title}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isTablet ? "1fr" : "1fr 1fr",
-                  gap: isTablet ? 28 : 72,
-                  alignItems: "center",
-                  direction: isTablet ? "ltr" : step.flip ? "rtl" : "ltr",
-                }}
+                className={`wi-hiw-step${step.flip ? " wi-hiw-step-reverse" : ""}`}
               >
                 {/* Illustration */}
                 <div style={{
                   direction: "ltr",
                   background: "linear-gradient(135deg, #F8FAFC, #F1F5F9)",
                   borderRadius: 24,
-                  height: isMobile ? 260 : 340,
+                  height: 340,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   border: "1px solid #E2E8F0",
                   overflow: "hidden",
@@ -82,14 +73,14 @@ export default function HowItWorks() {
                 </div>
 
                 {/* Text */}
-                <div style={{ direction: "ltr", textAlign: isTablet ? "center" : "left" }}>
+                <div style={{ direction: "ltr" }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: step.accent, letterSpacing: "0.06em" }}>
                     STEP {step.number}
                   </span>
-                  <h3 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 800, color: "#0F172A", margin: "12px 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+                  <h3 style={{ fontSize: "clamp(22px, 3vw, 28px)", fontWeight: 800, color: "#0F172A", margin: "12px 0 16px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
                     {step.title}
                   </h3>
-                  <p style={{ color: "#475569", lineHeight: 1.75, fontSize: isMobile ? 15 : 16, margin: 0 }}>
+                  <p style={{ color: "#475569", lineHeight: 1.75, fontSize: "clamp(15px, 2vw, 16px)", margin: 0 }}>
                     {step.description}
                   </p>
                 </div>
@@ -102,14 +93,14 @@ export default function HowItWorks() {
       {/* ── CTA Banner ── */}
       <section style={{
         background: "linear-gradient(135deg, #1E8FAD, #38A3C7)",
-        padding: isMobile ? "56px 20px" : "80px 32px",
+        padding: "clamp(56px, 8vw, 80px) clamp(20px, 4vw, 32px)",
         textAlign: "center", color: "white",
       }}>
         <h2 style={{ fontSize: "clamp(26px, 4vw, 40px)", fontWeight: 800, marginBottom: 16, letterSpacing: "-0.02em" }}>
           Ready to make gifting easy?
         </h2>
         <p style={{ fontSize: 17, opacity: 0.88, marginBottom: 36, maxWidth: 480, margin: "0 auto 36px" }}>
-          Create your first wishlist in seconds — it's completely free.
+          Create your first wishlist in seconds — it&apos;s completely free.
         </p>
         <button
           onClick={openSignup}
@@ -138,12 +129,10 @@ function CreatePreview() {
     <div style={{ padding: 28, width: "100%" }}>
       <div style={{ background: "white", borderRadius: 16, padding: 20, boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 14 }}>New Wish</div>
-        {/* URL bar */}
         <div style={{ background: "#F8FAFC", borderRadius: 8, padding: "10px 12px", marginBottom: 10, display: "flex", alignItems: "center", gap: 8, border: "1px solid #E2E8F0" }}>
           <div style={{ width: 14, height: 14, borderRadius: 3, background: "#CBD5E1" }} />
           <div style={{ height: 8, background: "#E2E8F0", borderRadius: 4, flex: 1 }} />
         </div>
-        {/* Auto-filled fields */}
         {[
           { label: "Title", width: "80%", color: "#0F172A", bg: "#F8FAFC" },
           { label: "Price", width: "40%", color: "#38A3C7", bg: "#E0F4FA" },
@@ -181,7 +170,6 @@ function SharePreview() {
             wish-it.vercel.app/wishlists/...
           </div>
         </div>
-        {/* Follower avatars */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
           <div style={{ display: "flex" }}>
             {["#38A3C7", "#F59E0B", "#22C55E", "#8B5CF6"].map((c, i) => (
@@ -201,9 +189,9 @@ function ReservePreview() {
       <div style={{ background: "white", borderRadius: 16, padding: 20, boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 14 }}>Birthday 2025</div>
         {[
-          { name: "AirPods Pro", price: "$249", reserved: true,  color: "#E0F4FA" },
+          { name: "AirPods Pro",   price: "$249", reserved: true,  color: "#E0F4FA" },
           { name: "Nike Sneakers", price: "$129", reserved: false, color: "#FEF3C7" },
-          { name: "Book Bundle",  price: "$45",  reserved: true,  color: "#DCFCE7" },
+          { name: "Book Bundle",   price: "$45",  reserved: true,  color: "#DCFCE7" },
         ].map((item) => (
           <div key={item.name} style={{
             display: "flex", alignItems: "center", gap: 10,

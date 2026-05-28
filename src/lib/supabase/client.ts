@@ -21,3 +21,22 @@ export function createClient() {
     }
   )
 }
+
+/**
+ * Races a Supabase/PostgREST query against a hard client-side timeout.
+ * If the DB never responds (connection hang, lock wait, etc.) the UI
+ * still transitions out of its loading state after `ms` milliseconds.
+ * The no-op rejection handler on `req` prevents an unhandled-rejection
+ * warning if the underlying request fails after the timeout already fired.
+ */
+export function withQueryTimeout<T>(
+  query: Promise<T> | PromiseLike<T>,
+  ms = 12_000,
+): Promise<T> {
+  const req = Promise.resolve(query)
+  req.then(undefined, () => undefined) // silence post-timeout errors
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Query timed out")), ms),
+  )
+  return Promise.race([req, timeout])
+}

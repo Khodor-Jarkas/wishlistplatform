@@ -1,10 +1,11 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { updateProfile, changePassword, deleteAccount } from "@/lib/actions/auth"
 import { toggleCreatorStatus, type CreatorEligibility } from "@/lib/actions/creators"
 import { createClient } from "@/lib/supabase/client"
+import { withUploadTimeout } from "@/lib/utils/image"
 import type { Profile } from "@/types"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
@@ -65,10 +66,56 @@ export default function ProfileSettingsClient({ profile, email, creatorEligibili
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    // Reset input so re-selecting same file triggers onChange
     e.target.value = ""
-    setCropFile(file)
+    if (file.type === "image/gif") {
+      handleGifUpload(file)
+    } else {
+      setCropFile(file)
+    }
   }
+
+  async function handleGifUpload(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileMsg("Error: GIF must be under 5 MB")
+      return
+    }
+    setUploading(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Upload the animated GIF (used only by the dashboard)
+      const gifPath = `${user.id}/avatar.gif`
+      const { error: gifError } = await withUploadTimeout(
+        supabase.storage.from("avatars").upload(gifPath, file, { upsert: true, contentType: "image/gif" }),
+        30_000,
+      )
+      if (gifError) { setProfileMsg("Error: " + gifError.message); return }
+
+      // Extract first frame → upload as static JPEG (used everywhere else)
+      const staticBlob = await extractFirstFrame(file)
+      await withUploadTimeout(
+        supabase.storage.from("avatars").upload(`${user.id}/avatar.jpg`, staticBlob, { upsert: true, contentType: "image/jpeg" }),
+        30_000,
+      )
+
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(gifPath)
+      const ts = Date.now()
+      setAvatarUrl(publicUrl + "?t=" + ts)
+      // Settings preview shows the static version (animated only on dashboard)
+      setAvatarPreview(URL.createObjectURL(staticBlob))
+    } catch (err) {
+      setProfileMsg(err instanceof Error ? "Error: " + err.message : "Upload failed.")
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Revoke stale avatar blob URL when preview is replaced or on unmount.
+  useEffect(() => {
+    return () => { if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview) }
+  }, [avatarPreview])
 
   async function handleCropApply(blob: Blob) {
     setCropFile(null)
@@ -78,14 +125,16 @@ export default function ProfileSettingsClient({ profile, email, creatorEligibili
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       const path = `${user.id}/avatar.jpg`
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(path, blob, { upsert: true, contentType: "image/jpeg" })
+      const { error: uploadError } = await withUploadTimeout(
+        supabase.storage.from("avatars").upload(path, blob, { upsert: true, contentType: "image/jpeg" }),
+        30_000,
+      )
       if (uploadError) { setProfileMsg("Error: " + uploadError.message); return }
       const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path)
-      // Bust browser cache by appending timestamp
       setAvatarUrl(publicUrl + "?t=" + Date.now())
       setAvatarPreview(URL.createObjectURL(blob))
+    } catch (err) {
+      setProfileMsg(err instanceof Error ? "Error: " + err.message : "Upload failed.")
     } finally {
       setUploading(false)
     }
@@ -264,7 +313,7 @@ export default function ProfileSettingsClient({ profile, email, creatorEligibili
           </p>
         )}
 
-        <Button type="submit" disabled={isPending} className="mt-6" style={{ maxWidth: 200, marginTop: 24 }}>
+        <Button type="submit" disabled={isPending || uploading} className="mt-6" style={{ maxWidth: 200, marginTop: 24 }}>
           {isPending ? "Saving…" : "SAVE CHANGES"}
         </Button>
       </form>
@@ -332,7 +381,35 @@ export default function ProfileSettingsClient({ profile, email, creatorEligibili
   )
 }
 
-// ── Creator section ──────────────────────────────────────────────
+// ── Helpers ──
+
+function extractFirstFrame(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = document.createElement("img")
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const SIZE = 512
+      const canvas = document.createElement("canvas")
+      canvas.width = SIZE
+      canvas.height = SIZE
+      const ctx = canvas.getContext("2d")!
+      const scale = Math.max(SIZE / img.naturalWidth, SIZE / img.naturalHeight)
+      const w = img.naturalWidth * scale
+      const h = img.naturalHeight * scale
+      ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))),
+        "image/jpeg",
+        0.92,
+      )
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image load failed")) }
+    img.src = url
+  })
+}
+
+// ── Creator section ──
 function CreatorSection({
   eligibility, checked, onToggle, message,
 }: {
@@ -349,8 +426,13 @@ function CreatorSection({
     )
   }
 
-  const { eligible, public_wishlist_count, has_avatar, required_public_wishlists } = eligibility
+  const {
+    eligible, has_avatar,
+    max_wishlist_followers, required_followers,
+    account_age_days, required_account_age_days,
+  } = eligibility
   const canToggleOn = eligible || checked
+  const daysLeft = Math.max(0, required_account_age_days - account_age_days)
 
   return (
     <div style={{
@@ -375,16 +457,22 @@ function CreatorSection({
           </strong>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {!has_avatar && <li>Upload a profile photo.</li>}
-            {public_wishlist_count < required_public_wishlists && (
+            {max_wishlist_followers < required_followers && (
               <li>
-                Create {required_public_wishlists - public_wishlist_count} more
-                public wishlist{required_public_wishlists - public_wishlist_count === 1 ? "" : "s"}
+                Get {required_followers} followers on at least one public wishlist
                 {" "}
-                (you have {public_wishlist_count}).
+                (your best has {max_wishlist_followers}).
                 {" "}
                 <Link href="/dashboard" style={{ color: "#0F172A", textDecoration: "underline" }}>
-                  Manage wishlists
+                  Share a wishlist
                 </Link>
+              </li>
+            )}
+            {daysLeft > 0 && (
+              <li>
+                Account must be at least {required_account_age_days} day{required_account_age_days === 1 ? "" : "s"} old
+                {" "}
+                ({daysLeft} more day{daysLeft === 1 ? "" : "s"} to go).
               </li>
             )}
           </ul>
@@ -403,7 +491,7 @@ function CreatorSection({
   )
 }
 
-// ── Avatar crop modal ────────────────────────────────────────────
+// ── Avatar crop modal ──
 function AvatarCropModal({ file, onApply, onCancel }: {
   file: File
   onApply: (blob: Blob) => void

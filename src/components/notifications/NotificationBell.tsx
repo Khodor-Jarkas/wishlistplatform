@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
+import { createClient, withQueryTimeout } from "@/lib/supabase/client"
 import { acceptFriendRequest, declineFriendRequest } from "@/lib/actions/friends"
 import { markAllNotificationsRead } from "@/lib/actions/notifications"
 import Drawer from "@/components/ui/Drawer"
@@ -12,28 +12,70 @@ interface Props {
   open: boolean
   onOpen: () => void
   onClose: () => void
+  currentUserId: string | null
 }
 
-export default function NotificationBell({ open, onOpen, onClose }: Props) {
+export default function NotificationBell({ open, onOpen, onClose, currentUserId }: Props) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount]     = useState(0)
   const [loading, setLoading]             = useState(false)
   const [isPending, start]                = useTransition()
 
-  // Fetch unread count on mount + subscribe to real-time inserts
+  // Fetch unread count on mount + subscribe to real-time inserts.
+  // Filter the channel to this user's rows only — without the filter every
+  // INSERT on the notifications table would increment every connected user's
+  // badge count, which is both incorrect and a data exposure risk.
   useEffect(() => {
+    if (!currentUserId) return
     fetchUnreadCount()
 
     const supabase = createClient()
     const channel = supabase
-      .channel("notifications-live")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, () => {
+      .channel(`notifications-live-${currentUserId}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "notifications",
+        filter: `user_id=eq.${currentUserId}`,
+      }, () => {
         setUnreadCount((c) => c + 1)
       })
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
-  }, [])
+    // Don't poll while the drawer is open — the open-effect already refetches.
+    // Fully pause the timer when the tab is hidden: cancel the scheduled tick
+    // so a forgotten tab never fires even a no-op setTimeout chain, and restart
+    // the cycle as soon as the tab becomes visible again.
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const BASE_MS = 60_000   // 60s base interval
+    const JITTER  = 0.4      // ±40% randomization
+
+    function scheduleNext() {
+      if (document.visibilityState !== "visible") return  // don't schedule while hidden
+      const factor = 1 + (Math.random() - 0.5) * JITTER * 2
+      const delay  = Math.round(BASE_MS * factor)
+      timer = setTimeout(tick, delay)
+    }
+    function tick() {
+      fetchUnreadCount()
+      scheduleNext()
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") {
+        fetchUnreadCount()  // immediate refresh on tab focus
+        scheduleNext()      // restart the polling cycle
+      } else {
+        if (timer) { clearTimeout(timer); timer = null }  // stop cold when hidden
+      }
+    }
+
+    scheduleNext()
+    document.addEventListener("visibilitychange", onVisibility)
+
+    return () => {
+      supabase.removeChannel(channel)
+      if (timer) clearTimeout(timer)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [currentUserId])
 
   // Fetch + mark read when opened
   useEffect(() => {
@@ -44,33 +86,57 @@ export default function NotificationBell({ open, onOpen, onClose }: Props) {
   }, [open])
 
   async function fetchUnreadCount() {
-    const supabase = createClient()
-    const { count } = await supabase
-      .from("notifications")
-      .select("*", { count: "exact", head: true })
-      .eq("is_read", false)
-    setUnreadCount(count ?? 0)
+    if (!currentUserId) return
+    try {
+      const supabase = createClient()
+      const { count } = await withQueryTimeout(
+        supabase
+          .from("notifications")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", currentUserId)
+          .eq("is_read", false)
+      )
+      setUnreadCount(count ?? 0)
+    } catch (e) {
+      console.warn("[NotificationBell] fetchUnreadCount", e)
+    }
   }
 
   async function fetchNotifications() {
+    if (!currentUserId) return
     setLoading(true)
-    const supabase = createClient()
-    const { data } = await supabase
-      .from("notifications")
-      .select("*, actor:actor_id(id, username, first_name, last_name, avatar_url)")
-      .order("created_at", { ascending: false })
-      .limit(30)
-    setNotifications((data as unknown as Notification[]) ?? [])
-    setLoading(false)
+    try {
+      const supabase = createClient()
+      const { data } = await withQueryTimeout(
+        supabase
+          .from("notifications")
+          .select("*, actor:actor_id(id, username, first_name, last_name, avatar_url)")
+          .eq("user_id", currentUserId)
+          .order("created_at", { ascending: false })
+          .limit(30)
+      )
+      setNotifications((data as unknown as Notification[]) ?? [])
+    } catch (e) {
+      console.warn("[NotificationBell] fetchNotifications", e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   function handleFriendAction(notifId: string, type: "accept" | "decline", friendshipId: string) {
+    // Optimistic — flip the row's type immediately, then call the server.
+    // On error, revert to the previous state.
+    const before = notifications
+    setNotifications((prev) =>
+      type === "accept"
+        ? prev.map((n) => n.id === notifId ? { ...n, type: "friend_accepted" as const } : n)
+        : prev.filter((n) => n.id !== notifId)
+    )
     start(async () => {
-      if (type === "accept") await acceptFriendRequest(friendshipId)
-      else await declineFriendRequest(friendshipId)
-      setNotifications((prev) =>
-        prev.map((n) => n.id === notifId ? { ...n, type: "friend_accepted" as const } : n)
-      )
+      const res = type === "accept"
+        ? await acceptFriendRequest(friendshipId)
+        : await declineFriendRequest(friendshipId)
+      if (res?.error) setNotifications(before)
     })
   }
 
@@ -81,8 +147,9 @@ export default function NotificationBell({ open, onOpen, onClose }: Props) {
         onClick={onOpen}
         style={{
           background: "none", border: "none", cursor: "pointer",
-          color: "#64748B", display: "flex", alignItems: "center",
-          position: "relative", padding: 4,
+          color: "#334155", display: "flex", alignItems: "center", justifyContent: "center",
+          width: 36, height: 36, flexShrink: 0,
+          position: "relative", padding: 0,
         }}
         title="Notifications"
       >
@@ -137,10 +204,13 @@ export default function NotificationBell({ open, onOpen, onClose }: Props) {
 // ── Notification icons ───────────────────────────────────────
 function NotifIcon({ type }: { type: string }) {
   const configs: Record<string, { bg: string; emoji: string }> = {
-    friend_request:    { bg: "#E0F4FA", emoji: "👤" },
-    friend_accepted:   { bg: "#DCFCE7", emoji: "🤝" },
-    wishlist_followed: { bg: "#F3E8FF", emoji: "⭐" },
-    wish_reserved:     { bg: "#FEF3C7", emoji: "🎁" },
+    friend_request:         { bg: "#E0F4FA", emoji: "👤" },
+    friend_accepted:        { bg: "#DCFCE7", emoji: "🤝" },
+    wishlist_followed:      { bg: "#F3E8FF", emoji: "⭐" },
+    wish_reserved:          { bg: "#FEF3C7", emoji: "🎁" },
+    wish_bought:            { bg: "#DCFCE7", emoji: "🛍️" },
+    event_reminder:         { bg: "#FCE7F3", emoji: "🎉" },
+    wishlist_collaboration: { bg: "#E0F4FA", emoji: "🤝" },
   }
   const cfg = configs[type] ?? { bg: "#F1F5F9", emoji: "🔔" }
   return (
@@ -174,7 +244,10 @@ function NotifRow({ notification: n, isPending, onFriendAction, onNavigate }: {
       case "friend_request":   return "/friends"
       case "friend_accepted":  return actor?.username ? `/users/${actor.username}` : "/friends"
       case "wishlist_followed": return n.target_id ? `/wishlists/${n.target_id}` : null
-      case "wish_reserved":    return wishlistIdFromMeta ? `/wishlists/${wishlistIdFromMeta}` : null
+      case "wish_reserved":          return wishlistIdFromMeta ? `/wishlists/${wishlistIdFromMeta}` : null
+      case "wish_bought":            return wishlistIdFromMeta ? `/wishlists/${wishlistIdFromMeta}` : null
+      case "event_reminder":         return n.target_id ? `/wishlists/${n.target_id}` : null
+      case "wishlist_collaboration": return n.target_id ? `/wishlists/${n.target_id}` : null
       default: return null
     }
   })()
@@ -199,6 +272,30 @@ function NotifRow({ notification: n, isPending, onFriendAction, onNavigate }: {
         return <p style={textStyle}><strong>{actorName}</strong> started following one of your wishlists</p>
       case "wish_reserved":
         return <p style={textStyle}>Someone reserved <strong>{wishTitle}</strong> on your wishlist 🎁</p>
+      case "wish_bought":
+        return <p style={textStyle}><strong>{actorName}</strong> bought <strong>{wishTitle}</strong> from your wishlist! 🛍️</p>
+      case "wishlist_collaboration": {
+        const wTitle = (n.meta?.title as string | undefined) ?? "a wishlist"
+        return (
+          <p style={textStyle}>
+            <strong>{actorName}</strong> added you as a collaborator on{" "}
+            {n.target_id
+              ? <Link href={`/wishlists/${n.target_id}`} style={{ color: "#38A3C7", fontWeight: 600, textDecoration: "none" }}>{wTitle}</Link>
+              : <strong>{wTitle}</strong>
+            }
+            {" "}🤝
+          </p>
+        )
+      }
+      case "event_reminder": {
+        const ownerName  = (n.meta?.owner_name  as string | undefined) ?? "Someone"
+        const daysUntil  = (n.meta?.days_until  as number | undefined) ?? 0
+        const occasion   = (n.meta?.occasion    as string | undefined)
+        const label      = occasionLabel(occasion)
+        return daysUntil === 0
+          ? <p style={textStyle}>🎉 Today is <strong>{ownerName}</strong>&apos;s {label}! Check out their wishlist</p>
+          : <p style={textStyle}>📅 <strong>{ownerName}</strong>&apos;s {label} is in <strong>1 week</strong> — check their wishlist</p>
+      }
       default:
         return null
     }
@@ -253,6 +350,19 @@ function SmallBtn({ label, onClick, primary = false, disabled }: {
 }
 
 const textStyle: React.CSSProperties = { margin: 0, fontSize: 13, color: "#0F172A", lineHeight: 1.5 }
+
+function occasionLabel(occasion: string | undefined): string {
+  const map: Record<string, string> = {
+    birthday:    "birthday",
+    christmas:   "Christmas",
+    wedding:     "wedding",
+    baby_shower: "baby shower",
+    graduation:  "graduation",
+    anniversary: "anniversary",
+    other:       "event",
+  }
+  return occasion ? (map[occasion] ?? "event") : "event"
+}
 
 function timeAgo(dateStr: string): string {
   const diff  = Date.now() - new Date(dateStr).getTime()

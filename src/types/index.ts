@@ -67,6 +67,13 @@ export interface WishlistFollower {
   profile?: Profile
 }
 
+export interface WishlistCollaborator {
+  wishlist_id: string
+  user_id: string
+  added_at: string
+  profile?: Pick<Profile, "id" | "username" | "first_name" | "last_name" | "full_name" | "avatar_url">
+}
+
 // ---- Wishes ----
 
 export type WishPriority = 0 | 1 | 2 // 0=normal, 1=high, 2=must-have
@@ -125,7 +132,7 @@ export interface Reservation {
 
 // ---- Notifications ----
 
-export type NotificationType = "friend_request" | "friend_accepted" | "wishlist_followed" | "wish_reserved"
+export type NotificationType = "friend_request" | "friend_accepted" | "wishlist_followed" | "wish_reserved" | "wish_bought" | "event_reminder" | "wishlist_collaboration"
 
 export interface Notification {
   id: string
@@ -142,7 +149,12 @@ export interface Notification {
 
 // ---- Activity ----
 
-export type ActivityType = "wishlist_created" | "wish_added" | "friendship_started"
+export type ActivityType =
+  | "wishlist_created"
+  | "wish_added"
+  | "friendship_started"
+  | "became_creator"
+  | "wish_received"
 
 export interface Activity {
   id: string

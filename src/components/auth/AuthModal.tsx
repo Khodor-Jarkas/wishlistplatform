@@ -18,7 +18,7 @@ const YEARS = Array.from({ length: 100 }, (_, i) => { const y = new Date().getFu
 const GENDERS = [
   { label: "Male",              value: "male"              },
   { label: "Female",            value: "female"            },
-  { label: "Non-binary",        value: "non_binary"        },
+  { label: "Other",             value: "other"             },
   { label: "Prefer not to say", value: "prefer_not_to_say" },
 ]
 
@@ -143,23 +143,30 @@ export default function AuthModal() {
   return (
     <>
       {/* Backdrop */}
-      <div onClick={close} style={{
+      <div onClick={close} className="wi-anim-fade" style={{
         position: "fixed", inset: 0, zIndex: 200,
         background: "rgba(0,0,0,0.45)",
         backdropFilter: "blur(3px)",
         WebkitBackdropFilter: "blur(3px)",
       }} />
 
-      {/* Card */}
-      <div role="dialog" aria-modal="true" aria-label={title} style={{
-        position: "fixed", top: "50%", left: "50%",
-        transform: "translate(-50%, -50%)",
-        zIndex: 201, background: "white", borderRadius: 24,
-        width: "calc(100% - 32px)", maxWidth: 480,
-        padding: isMobile ? "20px 20px 28px" : "24px 28px 32px",
-        boxShadow: "0 24px 64px rgba(0,0,0,0.2)",
-        maxHeight: "90vh", overflowY: "auto",
-      }}>
+      {/* Card — full-screen on mobile so keyboard can never hide the submit button */}
+      <div role="dialog" aria-modal="true" aria-label={title}
+        className={isMobile ? "wi-anim-fade" : "wi-anim-modal-centered"}
+        style={isMobile ? {
+          position: "fixed", inset: 0, zIndex: 201,
+          background: "white", overflowY: "auto",
+          padding: "20px 20px 0",
+          paddingBottom: "max(28px, env(safe-area-inset-bottom))",
+        } : {
+          position: "fixed", top: "50%", left: "50%",
+          transform: "translate(-50%, -50%)",
+          zIndex: 201, background: "white", borderRadius: 24,
+          width: "calc(100% - 32px)", maxWidth: 480,
+          padding: "24px 28px 32px",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.2)",
+          maxHeight: "90dvh", overflowY: "auto",
+        }}>
 
         {/* Top bar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -232,7 +239,6 @@ export default function AuthModal() {
 
             <OAuthButtons
               mode={isLogin ? "login" : "signup"}
-              usePopup
               onNewUser={() => setStep("profile")}
             />
 
@@ -255,7 +261,7 @@ export default function AuthModal() {
         {/* ── Step: Email + password ── */}
         {step === "email" && (
           <form onSubmit={handleEmailSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <Input label="Email"    name="email"    type="email"    placeholder="youremail@gmail.com" required autoFocus />
+            <Input label="Email"    name="email"    type="email"    placeholder="youremail@gmail.com" required />
             <Input label="Password" name="password" type="password" placeholder="Min. 8 characters"   required />
             {error && <ErrorMsg>{error}</ErrorMsg>}
             <SubmitBtn isPending={isPending} dark={isLogin}>
@@ -301,7 +307,7 @@ export default function AuthModal() {
         {(step === "profile" || isProfileSetup) && (
           <form onSubmit={handleProfileSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-              <Input label="First name" name="first_name" placeholder="First name" required autoFocus />
+              <Input label="First name" name="first_name" placeholder="First name" required />
               <Input label="Last name"  name="last_name"  placeholder="Last name"  required />
             </div>
 

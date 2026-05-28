@@ -18,7 +18,11 @@ export default function LoginPage() {
     const form = e.currentTarget
     startTransition(async () => {
       const result = await signInWithEmail(new FormData(form))
-      if (result?.error) setError(result.error)
+      if (result?.error) { setError(result.error); return }
+      // Full reload so the server-rendered Header re-fetches the session.
+      // router.push wouldn't bust the layout cache and the UI would still
+      // show "logged out" until a manual refresh.
+      if (result?.redirect) window.location.href = result.redirect
     })
   }
 

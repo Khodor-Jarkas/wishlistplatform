@@ -1,10 +1,13 @@
 "use client"
 
 import { useState } from "react"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import type { Wishlist } from "@/types"
-import EditWishlistModal from "./EditWishlistModal"
 import DeleteConfirmModal from "./DeleteConfirmModal"
+
+const EditWishlistModal = dynamic(() => import("./EditWishlistModal"), { ssr: false })
+
 
 export const WISHLIST_COLOR_PRESETS: Record<string, string> = {
   blue:   "linear-gradient(135deg, #38A3C7 0%, #1E6B88 100%)",
@@ -34,7 +37,6 @@ interface Props {
 }
 
 export default function WishlistCard({ wishlist, isOwner, showOwner = false }: Props) {
-  const [hovered, setHovered] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
@@ -50,28 +52,25 @@ export default function WishlistCard({ wishlist, isOwner, showOwner = false }: P
 
   return (
     <>
-      <div
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{ position: "relative" }}
-      >
+      <div className="wi-wishlist-card" style={{ position: "relative" }}>
         <Link href={`/wishlists/${wishlist.id}`} style={{ display: "block", textDecoration: "none" }}>
           {/* Image / gradient */}
           <div
+            className="wi-wishlist-card-image"
             style={{
               borderRadius: 12,
               overflow: "hidden",
               height: 160,
               position: "relative",
               background: wishlist.cover_image_url ? "transparent" : gradient,
-              boxShadow: hovered ? "0 6px 24px rgba(0,0,0,0.14)" : "0 1px 4px rgba(0,0,0,0.08)",
-              transition: "box-shadow 0.2s",
             }}
           >
             {wishlist.cover_image_url && (
               <img
                 src={wishlist.cover_image_url}
                 alt={wishlist.title}
+                loading="lazy"
+                decoding="async"
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             )}
@@ -127,12 +126,13 @@ export default function WishlistCard({ wishlist, isOwner, showOwner = false }: P
           </div>
         </Link>
 
-        {/* Owner hover actions */}
-        {isOwner && hovered && (
-          <div style={{ position: "absolute", top: 10, left: 10, display: "flex", gap: 6 }}>
+        {/* Owner hover actions — shown via CSS .wi-wishlist-card:hover */}
+        {isOwner && (
+          <div className="wi-wishlist-card-actions" style={{ position: "absolute", top: 10, left: 10, display: "flex", gap: 6 }}>
             <button
               onClick={(e) => { e.preventDefault(); setEditOpen(true) }}
-              title="Edit"
+              title="Edit wishlist"
+              aria-label={`Edit ${wishlist.title}`}
               style={{
                 width: 28, height: 28, borderRadius: 8, background: "white",
                 border: "none", cursor: "pointer", fontSize: 12,
@@ -144,7 +144,8 @@ export default function WishlistCard({ wishlist, isOwner, showOwner = false }: P
             </button>
             <button
               onClick={(e) => { e.preventDefault(); setDeleteOpen(true) }}
-              title="Delete"
+              title="Delete wishlist"
+              aria-label={`Delete ${wishlist.title}`}
               style={{
                 width: 28, height: 28, borderRadius: 8, background: "#FEE2E2",
                 border: "none", cursor: "pointer", fontSize: 12,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
+import { createClient, withQueryTimeout } from "@/lib/supabase/client"
 import {
   acceptFriendRequest,
   declineFriendRequest,
@@ -13,7 +13,7 @@ import {
   fetchSuggestedUsers,
 } from "@/lib/actions/friends"
 import { getCreators, type CreatorCard as CreatorCardData } from "@/lib/actions/creators"
-import { getInitials } from "@/lib/utils"
+import { getInitials, staticAvatarUrl } from "@/lib/utils"
 import Drawer from "@/components/ui/Drawer"
 import type { Profile } from "@/types"
 
@@ -64,19 +64,35 @@ export default function FriendsDrawer({ open, onOpen, onClose, currentUserId }: 
     }
   }, [open, tab])
 
+  // Refetch when the tab is brought back to the foreground while the drawer
+  // is open. Mobile browsers suspend WebSockets for backgrounded tabs, so the
+  // realtime channel can miss updates — visibility refetch catches them up.
+  useEffect(() => {
+    if (!open) return
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return
+      if (currentUserId) fetchFriends()
+      if (tab === "creators" && creators.length === 0) loadCreators()
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => document.removeEventListener("visibilitychange", onVisibility)
+  }, [open, currentUserId, tab, creators.length])
+
   async function fetchFriends() {
     if (!currentUserId) return
     setLoading(true)
     try {
       const supabase = createClient()
-      const { data, error } = await supabase
-        .from("friendships")
-        .select(
-          "*, requester:requester_id(id,username,first_name,last_name,avatar_url), " +
-          "addressee:addressee_id(id,username,first_name,last_name,avatar_url)"
-        )
-        .or(`requester_id.eq.${currentUserId},addressee_id.eq.${currentUserId}`)
-        .order("created_at", { ascending: false })
+      const { data, error } = await withQueryTimeout(
+        supabase
+          .from("friendships")
+          .select(
+            "*, requester:requester_id(id,username,first_name,last_name,avatar_url), " +
+            "addressee:addressee_id(id,username,first_name,last_name,avatar_url)"
+          )
+          .or(`requester_id.eq.${currentUserId},addressee_id.eq.${currentUserId}`)
+          .order("created_at", { ascending: false })
+      )
 
       if (error) console.error("[FriendsDrawer] fetchFriends", error)
 
@@ -152,8 +168,9 @@ export default function FriendsDrawer({ open, onOpen, onClose, currentUserId }: 
         title="Friends"
         style={{
           background: "none", border: "none", cursor: "pointer",
-          color: "#64748B", display: "flex", alignItems: "center", padding: 4,
-          position: "relative",
+          color: "#334155", display: "flex", alignItems: "center", justifyContent: "center",
+          width: 36, height: 36, flexShrink: 0,
+          position: "relative", padding: 0,
         }}
       >
         <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
@@ -476,7 +493,7 @@ function Avatar({ profile, size }: { profile: Profile; size: number }) {
       color: "white", fontWeight: 700, fontSize: size * 0.35,
     }}>
       {profile.avatar_url
-        ? <img src={profile.avatar_url} alt={profile.username} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ? <img src={staticAvatarUrl(profile.avatar_url)!} alt={profile.username} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         : getInitials(profile)}
     </div>
   )
@@ -510,7 +527,7 @@ function CreatorRow({ creator, onNavigate }: { creator: CreatorCardData; onNavig
         color: "white", fontWeight: 700, fontSize: 13,
       }}>
         {creator.avatar_url
-          ? <img src={creator.avatar_url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ? <img src={staticAvatarUrl(creator.avatar_url)!} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           : initials}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>

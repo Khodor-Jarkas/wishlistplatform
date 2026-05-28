@@ -15,6 +15,7 @@ export default function InspirationsDropdown({ onMouseEnter, onMouseLeave }: Pro
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      className="wi-anim-dropdown"
       style={{
         position: "absolute",
         top: "calc(100% + 4px)",

@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { updateWish } from "@/lib/actions/wishes"
 import { useIsMobile } from "@/lib/hooks/useMediaQuery"
+import { compressImage, withUploadTimeout } from "@/lib/utils/image"
+import { CURRENCIES } from "@/lib/currencies"
 import type { Wish } from "@/types"
-
-const CURRENCIES = ["USD", "EUR", "GBP", "LBP", "AED", "SAR"]
 
 interface Props {
   wish: Wish
@@ -25,28 +25,59 @@ export default function EditWishModal({ wish, wishlistId, onClose }: Props) {
   const [error, setError]               = useState("")
   const [isPending, start]              = useTransition()
 
+  useEffect(() => {
+    return () => { if (imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview) }
+  }, [imagePreview])
+
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setUploading(false); return }
-    const ext  = file.name.split(".").pop()
-    const path = `${user.id}/wish-${Date.now()}.${ext}`
-    const { error: uploadError } = await supabase.storage
-      .from("wishlist-covers").upload(path, file, { upsert: true })
-    if (uploadError) { setError("Upload failed: " + uploadError.message); setUploading(false); return }
-    const { data: { publicUrl } } = supabase.storage.from("wishlist-covers").getPublicUrl(path)
-    setImageUrl(publicUrl)
-    setImagePreview(URL.createObjectURL(file))
-    setUploading(false)
+    setError("")
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError("Please log in again."); return }
+      const { blob, contentType, ext } = await compressImage(file)
+      const path = `${user.id}/wish-${Date.now()}.${ext}`
+      const { error: uploadError } = await withUploadTimeout(
+        supabase.storage.from("wishlist-covers").upload(path, blob, { upsert: true, contentType })
+      )
+      if (uploadError) { setError("Upload failed: " + uploadError.message); return }
+      const { data: { publicUrl } } = supabase.storage.from("wishlist-covers").getPublicUrl(path)
+      setImageUrl(publicUrl)
+      setImagePreview(URL.createObjectURL(blob))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.")
+      console.error("[EditWishModal] image upload failed", err)
+    } finally {
+      setUploading(false)
+    }
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError("")
     const fd = new FormData(e.currentTarget)
+
+    // Skip the round-trip if nothing actually changed (mistapped Save).
+    const formTitle       = ((fd.get("title")       as string) ?? "").trim()
+    const formDescription = ((fd.get("description") as string) ?? "").trim()
+    const formPrice       = ((fd.get("price")       as string) ?? "").trim()
+    const formUrl         = ((fd.get("url")         as string) ?? "").trim()
+
+    const unchanged =
+      formTitle       === (wish.title       ?? "") &&
+      formDescription === (wish.description ?? "") &&
+      formPrice       === (wish.price != null ? String(wish.price) : "") &&
+      formUrl         === (wish.url         ?? "") &&
+      currency        === (wish.currency || "USD") &&
+      quantity        === (wish.quantity    ?? 1) &&
+      imageUrl        === (wish.image_url   ?? "") &&
+      isMostWanted    === (wish.priority === 2)
+
+    if (unchanged) { onClose(); return }
+
     fd.set("wish_id", wish.id)
     fd.set("wishlist_id", wishlistId)
     fd.set("is_most_wanted", String(isMostWanted))
@@ -65,6 +96,7 @@ export default function EditWishModal({ wish, wishlistId, onClose }: Props) {
       {/* Backdrop */}
       <div
         onClick={onClose}
+        className="wi-anim-fade"
         style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
           zIndex: 500, backdropFilter: "blur(2px)",
@@ -74,9 +106,9 @@ export default function EditWishModal({ wish, wishlistId, onClose }: Props) {
       {/* Modal */}
       <div
         onClick={(e) => e.stopPropagation()}
+        className="wi-anim-modal-centered"
         style={{
           position: "fixed", top: "50%", left: "50%",
-          transform: "translate(-50%, -50%)",
           zIndex: 501, background: "white", borderRadius: 16,
           boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
           width: "min(860px, 95vw)",

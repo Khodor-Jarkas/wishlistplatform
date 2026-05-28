@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { slugify } from "@/lib/utils"
+import { slugify, getDisplayName } from "@/lib/utils"
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
@@ -39,13 +39,93 @@ export async function createWishlist(formData: FormData) {
 
   if (error) return { error: error.message }
 
-  // Activity
-  await supabase.from("activity").insert({
-    user_id:   user.id,
-    type:      "wishlist_created",
-    target_id: data.id,
-    meta:      { title },
-  })
+  // ── Parse collaborator IDs ─────────────────────────────────────────────────
+  let collaboratorIds: string[] = []
+  const rawCollabIds = formData.get("collaborator_ids") as string | null
+  if (rawCollabIds) {
+    try { collaboratorIds = JSON.parse(rawCollabIds) } catch { /* ignore */ }
+  }
+
+  // ── Fetch creator profile (needed for notification meta) ──────────────────
+  const { data: creatorProfile } = await supabase
+    .from("profiles")
+    .select("username, first_name, last_name, full_name")
+    .eq("id", user.id)
+    .single()
+
+  const creatorName = creatorProfile
+    ? getDisplayName(creatorProfile as Parameters<typeof getDisplayName>[0])
+    : "Someone"
+
+  // ── Handle collaborators ──────────────────────────────────────────────────
+  if (collaboratorIds.length > 0) {
+    // Insert rows into wishlist_collaborators
+    await supabase.from("wishlist_collaborators").insert(
+      collaboratorIds.map((uid) => ({ wishlist_id: data.id, user_id: uid }))
+    )
+
+    // Fetch collaborator profiles for names/usernames in meta
+    const { data: collabProfiles } = await supabase
+      .from("profiles")
+      .select("id, username, first_name, last_name, full_name")
+      .in("id", collaboratorIds)
+
+    // Build lookup maps stored in activity meta so the feed can render names
+    // without extra queries.  Key = user id.
+    const collabNames: Record<string, string>    = {}
+    const collabUsernames: Record<string, string> = {}
+    for (const p of collabProfiles ?? []) {
+      collabNames[p.id]    = getDisplayName(p as Parameters<typeof getDisplayName>[0])
+      collabUsernames[p.id] = p.username ?? ""
+    }
+
+    // Activity for the creator — includes all collaborators in meta
+    await supabase.from("activity").insert({
+      user_id:   user.id,
+      type:      "wishlist_created",
+      target_id: data.id,
+      meta: {
+        title,
+        other_participant_names:     collabNames,
+        other_participant_usernames: collabUsernames,
+      },
+    })
+
+    // Activity + notification for each collaborator
+    const creatorActivityMeta = {
+      title,
+      other_participant_names:     { [user.id]: creatorName },
+      other_participant_usernames: { [user.id]: creatorProfile?.username ?? "" },
+    }
+
+    const activityRows = collaboratorIds.map((uid) => ({
+      user_id:   uid,
+      type:      "wishlist_created" as const,
+      target_id: data.id,
+      meta:      creatorActivityMeta,
+    }))
+
+    const notificationRows = collaboratorIds.map((uid) => ({
+      user_id:   uid,
+      type:      "wishlist_collaboration" as const,
+      actor_id:  user.id,
+      target_id: data.id,
+      meta:      { title, creator_name: creatorName },
+    }))
+
+    await Promise.all([
+      supabase.from("activity").insert(activityRows),
+      supabase.from("notifications").insert(notificationRows),
+    ])
+  } else {
+    // No collaborators — plain activity row
+    await supabase.from("activity").insert({
+      user_id:   user.id,
+      type:      "wishlist_created",
+      target_id: data.id,
+      meta:      { title },
+    })
+  }
 
   redirect(`/wishlists/${data.id}`)
 }

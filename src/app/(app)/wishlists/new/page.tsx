@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { createWishlist } from "@/lib/actions/wishlists"
@@ -8,6 +8,7 @@ import Container from "@/components/ui/Container"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import { useIsMobile } from "@/lib/hooks/useMediaQuery"
+import { compressImage, withUploadTimeout } from "@/lib/utils/image"
 
 const OCCASIONS = [
   { label: "Birthday", value: "birthday" },
@@ -41,34 +42,34 @@ export default function NewWishlistPage() {
   const [error, setError] = useState("")
   const [isPending, start] = useTransition()
 
+  useEffect(() => {
+    return () => { if (coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview) }
+  }, [coverPreview])
+
   async function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-
-    const supabase = createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) { setUploading(false); return }
-
-    const ext = file.name.split(".").pop()
-    const path = `${user.id}/${Date.now()}.${ext}`
-
-    const { error: uploadError } = await supabase.storage
-      .from("wishlist-covers")
-      .upload(path, file, { upsert: true })
-
-    if (uploadError) {
-      setError("Cover upload failed: " + uploadError.message)
+    setError("")
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError("Please log in again."); return }
+      const { blob, contentType, ext } = await compressImage(file)
+      const path = `${user.id}/${Date.now()}.${ext}`
+      const { error: uploadError } = await withUploadTimeout(
+        supabase.storage.from("wishlist-covers").upload(path, blob, { upsert: true, contentType })
+      )
+      if (uploadError) { setError("Cover upload failed: " + uploadError.message); return }
+      const { data: { publicUrl } } = supabase.storage.from("wishlist-covers").getPublicUrl(path)
+      setCoverUrl(publicUrl)
+      setCoverPreview(URL.createObjectURL(blob))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Cover upload failed.")
+      console.error("[NewWishlist] cover upload failed", err)
+    } finally {
       setUploading(false)
-      return
     }
-
-    const { data: { publicUrl } } = supabase.storage.from("wishlist-covers").getPublicUrl(path)
-    setCoverUrl(publicUrl)
-    setCoverPreview(URL.createObjectURL(file))
-    setUploading(false)
   }
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {

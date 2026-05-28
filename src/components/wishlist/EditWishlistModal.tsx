@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { updateWishlist } from "@/lib/actions/wishlists"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import { WISHLIST_COLOR_PRESETS } from "./WishlistCard"
 import { useIsMobile } from "@/lib/hooks/useMediaQuery"
+import { compressImage, withUploadTimeout } from "@/lib/utils/image"
 import type { Wishlist } from "@/types"
 
 const OCCASIONS = [
@@ -47,34 +48,61 @@ export default function EditWishlistModal({ wishlist, onClose }: Props) {
   const [error, setError] = useState("")
   const [isPending, start] = useTransition()
 
+  useEffect(() => {
+    return () => { if (coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview) }
+  }, [coverPreview])
+
   async function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    const supabase = createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) { setUploading(false); return }
-
-    const ext = file.name.split(".").pop()
-    const path = `${user.id}/${Date.now()}.${ext}`
-    const { error: uploadError } = await supabase.storage
-      .from("wishlist-covers")
-      .upload(path, file, { upsert: true })
-
-    if (uploadError) { setError("Upload failed: " + uploadError.message); setUploading(false); return }
-
-    const { data: { publicUrl } } = supabase.storage.from("wishlist-covers").getPublicUrl(path)
-    setCoverUrl(publicUrl)
-    setCoverPreview(URL.createObjectURL(file))
-    setUploading(false)
+    setError("")
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError("Please log in again."); return }
+      const { blob, contentType, ext } = await compressImage(file)
+      const path = `${user.id}/${Date.now()}.${ext}`
+      const { error: uploadError } = await withUploadTimeout(
+        supabase.storage.from("wishlist-covers").upload(path, blob, { upsert: true, contentType })
+      )
+      if (uploadError) { setError("Upload failed: " + uploadError.message); return }
+      const { data: { publicUrl } } = supabase.storage.from("wishlist-covers").getPublicUrl(path)
+      setCoverUrl(publicUrl)
+      setCoverPreview(URL.createObjectURL(blob))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.")
+      console.error("[EditWishlistModal] cover upload failed", err)
+    } finally {
+      setUploading(false)
+    }
   }
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     setError("")
     const fd = new FormData(e.currentTarget)
+
+    // Skip the round-trip if nothing actually changed (mistapped Save).
+    const formTitle       = ((fd.get("title")            as string) ?? "").trim()
+    const formDescription = ((fd.get("description")      as string) ?? "").trim()
+    const formOccasion    = ((fd.get("occasion")         as string) ?? "").trim()
+    const formEventDate   = ((fd.get("event_date")       as string) ?? "").trim()
+    const formBeneficiary = ((fd.get("beneficiary_name") as string) ?? "").trim()
+
+    const unchanged =
+      formTitle         === (wishlist.title             ?? "") &&
+      formDescription   === (wishlist.description       ?? "") &&
+      formOccasion      === (wishlist.occasion          ?? "") &&
+      formEventDate     === (wishlist.event_date        ?? "") &&
+      formBeneficiary   === ((wishlist as any).beneficiary_name ?? "") &&
+      selectedType      === wishlist.type &&
+      selectedVisibility === wishlist.visibility &&
+      coverUrl          === (wishlist.cover_image_url   ?? "") &&
+      selectedColor     === ((wishlist as any).color    ?? "blue")
+
+    if (unchanged) { onClose(); return }
+
     fd.set("id", wishlist.id)
     fd.set("type", selectedType)
     fd.set("visibility", selectedVisibility)
@@ -102,6 +130,7 @@ export default function EditWishlistModal({ wishlist, onClose }: Props) {
       {/* Backdrop */}
       <div
         onClick={onClose}
+        className="wi-anim-fade"
         style={{
           position: "fixed",
           inset: 0,
@@ -113,11 +142,11 @@ export default function EditWishlistModal({ wishlist, onClose }: Props) {
 
       {/* Modal */}
       <div
+        className="wi-anim-modal-centered"
         style={{
           position: "fixed",
           top: "50%",
           left: "50%",
-          transform: "translate(-50%,-50%)",
           zIndex: 301,
           background: "white",
           borderRadius: 20,

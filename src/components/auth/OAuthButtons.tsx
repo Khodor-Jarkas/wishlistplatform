@@ -2,19 +2,13 @@
 
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { useAuthModal } from "@/context/AuthModalContext"
 
 type Provider = "google" | "facebook" | "apple"
 
 interface Props {
   mode: "signup" | "login"
-  usePopup?: boolean
   onNewUser?: () => void
 }
-
-// Keys shared with OAuthPopupHandler and popup-callback page.
-const OAUTH_RESULT_KEY  = "wish_it_oauth_result"
-const POPUP_PENDING_KEY = "wish_it_popup_pending"
 
 const FacebookIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
@@ -44,33 +38,24 @@ const providers: {
   bg: string
   color: string
   border?: string
-  popup?: boolean
 }[] = [
   { id: "facebook", label: "CONTINUE WITH FACEBOOK", Icon: FacebookIcon, bg: "#1877F2", color: "white" },
-  { id: "google",   label: "CONTINUE WITH GOOGLE",   Icon: GoogleIcon,   bg: "white",   color: "#334155", border: "1px solid #E2E8F0", popup: true },
+  { id: "google",   label: "CONTINUE WITH GOOGLE",   Icon: GoogleIcon,   bg: "white",   color: "#334155", border: "1px solid #E2E8F0" },
   { id: "apple",    label: "CONTINUE WITH APPLE",    Icon: AppleIcon,    bg: "#000",    color: "white" },
 ]
 
-export default function OAuthButtons({ mode, usePopup, onNewUser }: Props) {
-  const { close: closeModal } = useAuthModal()
+export default function OAuthButtons({ mode, onNewUser: _onNewUser }: Props) {
   const [error, setError]     = useState("")
   const [loading, setLoading] = useState<Provider | null>(null)
 
-  async function handleOAuth(provider: Provider, supportsPopup?: boolean) {
+  async function handleOAuth(provider: Provider) {
     setError("")
     setLoading(provider)
-
-    const supabase    = createClient()
-    const shouldPopup = usePopup && supportsPopup
+    const supabase = createClient()
 
     const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
-      options: {
-        skipBrowserRedirect: !!shouldPopup,
-        redirectTo: shouldPopup
-          ? `${window.location.origin}/auth/popup-callback`
-          : `${window.location.origin}/auth/callback`,
-      },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     })
 
     if (oauthError || !data.url) {
@@ -84,160 +69,17 @@ export default function OAuthButtons({ mode, usePopup, onNewUser }: Props) {
       return
     }
 
-    if (shouldPopup) {
-      // Mark that a popup flow is in progress (timestamp so it expires).
-      // OAuthPopupHandler reads this to know whether a code on "/" came
-      // from the popup and should be forwarded to /auth/popup-callback.
-      localStorage.setItem(POPUP_PENDING_KEY, Date.now().toString())
-
-      const popup = window.open(
-        data.url,
-        "oauth_popup",
-        "width=520,height=620,scrollbars=yes,resizable=yes,left=200,top=80"
-      )
-
-      if (!popup) {
-        // Popup blocked — fall back to server-side callback flow.
-        localStorage.removeItem(POPUP_PENDING_KEY)
-        document.cookie = "auth_from_modal=1; path=/; max-age=300; SameSite=Lax"
-        const { data: fd } = await supabase.auth.signInWithOAuth({
-          provider,
-          options: { redirectTo: `${window.location.origin}/auth/callback` },
-        })
-        if (fd?.url) window.location.href = fd.url
-        else setLoading(null)
-        return
-      }
-
-      // Clears all listeners and the main interval.
-      let mainInterval: ReturnType<typeof setInterval>
-      function cleanup() {
-        clearInterval(mainInterval)
-        window.removeEventListener("storage", onStorage)
-        window.removeEventListener("message", onMessage)
-        localStorage.removeItem(OAUTH_RESULT_KEY)
-        localStorage.removeItem(POPUP_PENDING_KEY)
-      }
-
-      // Closes the modal and navigates to the dashboard.
-      function navigateToDashboard() {
-        closeModal()
-        window.location.href = "/dashboard"
-      }
-
-      // ── Path 1: storage event (same-origin) ───────────────────────────
-      // Fires when popup-callback (same origin as this window) writes
-      // OAUTH_RESULT_KEY. Does NOT fire in cross-origin scenarios.
-      function onStorage(e: StorageEvent) {
-        if (e.key !== OAUTH_RESULT_KEY || !e.newValue) return
-        try {
-          const result = JSON.parse(e.newValue) as { type: string; isNewUser?: boolean }
-          if (!["oauth_complete", "oauth_failed"].includes(result.type)) return
-          cleanup(); popup?.close(); setLoading(null)
-          if (result.type === "oauth_failed") { setError("Sign-in failed. Please try again."); return }
-          if (result.isNewUser) onNewUser?.()
-          else navigateToDashboard()
-        } catch { /* ignore malformed */ }
-      }
-      window.addEventListener("storage", onStorage)
-
-      // ── Path 2: ping/pong postMessage (cross-origin) ──────────────────
-      // When the parent is on a different origin than the popup (e.g. network
-      // IP vs localhost), the storage event never fires. The main interval
-      // below pings the popup every 300 ms; the popup responds with session
-      // tokens so we can call setSession() on this origin.
-      function onMessage(e: MessageEvent) {
-        // Parent-side exchange: popup sent us the raw OAuth code because the
-        // PKCE verifier lives here. Reset UI immediately (synchronously), then
-        // exchange the code and navigate once it resolves.
-        if (e.data?.type === "wish_it_code") {
-          const { code } = e.data as { code: string }
-          cleanup()         // stop interval + remove listeners now
-          popup?.close()
-          setLoading(null)  // unblock UI before any async work
-          supabase.auth.exchangeCodeForSession(code)
-            .then(({ data, error }) => {
-              if (error || !data.session?.user) {
-                setError("Sign-in failed. Please try again.")
-                return
-              }
-              return supabase
-                .from("profiles").select("first_name")
-                .eq("id", data.session.user.id).single()
-                .then(({ data: profile }) => {
-                  if (!profile?.first_name) onNewUser?.()
-                  else navigateToDashboard()
-                })
-            })
-            .catch(() => setError("Sign-in failed. Please try again."))
-          return
-        }
-
-        if (e.data?.type !== "wish_it_pong") return
-        const { failed, isNewUser, access_token, refresh_token } = e.data as {
-          failed: boolean; isNewUser: boolean
-          access_token?: string; refresh_token?: string
-        }
-        cleanup()
-        if (failed || !access_token || !refresh_token) {
-          setError("Sign-in failed. Please try again.")
-          setLoading(null)
-          return
-        }
-        supabase.auth.setSession({ access_token, refresh_token })
-          .then(() => {
-            setLoading(null)
-            if (isNewUser) onNewUser?.()
-            else navigateToDashboard()
-          })
-          .catch(() => { setError("Sign-in failed. Please try again."); setLoading(null) })
-      }
-      window.addEventListener("message", onMessage)
-
-      // ── Main interval: ping popup + detect close ──────────────────────
-      // Sends a wish_it_ping to the popup on every tick (cross-origin signal).
-      // Also detects when the user manually closes the popup.
-      mainInterval = setInterval(() => {
-        // popup.closed may throw when Google's COOP header severs the opener
-        // reference while the user is on Google's auth page. Treat a throw as
-        // "still open" and keep pinging — cleanup happens via onMessage.
-        let isClosed = false
-        try { isClosed = popup.closed } catch { isClosed = false }
-
-        if (!isClosed) {
-          try { popup.postMessage({ type: "wish_it_ping" }, "*") } catch { /* COOP — ignore */ }
-          return
-        }
-        // Popup closed — check localStorage fallback (same-origin) then cancel.
-        const stored = localStorage.getItem(OAUTH_RESULT_KEY)
-        if (stored) {
-          try {
-            const result = JSON.parse(stored) as { type: string; isNewUser?: boolean }
-            if (["oauth_complete", "oauth_failed"].includes(result.type)) {
-              cleanup(); setLoading(null)
-              if (result.type === "oauth_failed") { setError("Sign-in failed. Please try again."); return }
-              if (result.isNewUser) onNewUser?.()
-              else navigateToDashboard()
-              return
-            }
-          } catch { /* ignore */ }
-        }
-        cleanup(); setLoading(null)
-      }, 300)
-
-      return
-    }
-
-    // Non-popup providers — standard full-page redirect.
+    // Signal to the callback route that we came from the modal (new-user profile setup).
+    document.cookie = "auth_from_modal=1; path=/; max-age=300; SameSite=Lax"
     window.location.href = data.url
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {providers.map(({ id, label, Icon, bg, color, border, popup }) => (
+      {providers.map(({ id, label, Icon, bg, color, border }) => (
         <button
           key={id}
-          onClick={() => handleOAuth(id, popup)}
+          onClick={() => handleOAuth(id)}
           disabled={loading !== null}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 12,

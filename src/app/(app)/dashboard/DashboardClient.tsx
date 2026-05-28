@@ -52,11 +52,11 @@ export default function DashboardClient({
         <div style={{ position: "absolute", bottom: -40, left: -40, width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
 
         <Container>
-          <div style={{ paddingTop: 48, color: "white" }}>
+          <div style={{ paddingTop: "clamp(28px, 5vw, 48px)", color: "white" }}>
             <p style={{ fontSize: 14, opacity: 0.8, margin: "0 0 4px" }}>
               {greeting()},
             </p>
-            <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>
+            <h1 style={{ fontSize: "clamp(22px, 4vw, 28px)", fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>
               {firstName} 👋
             </h1>
           </div>

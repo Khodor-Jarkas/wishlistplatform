@@ -87,6 +87,45 @@ function findProduct(node: any): any {
   return null
 }
 
+// Block requests to private/loopback IP ranges and disallowed schemes.
+// Prevents SSRF where the client supplies a crafted URL to reach internal
+// services (AWS metadata, localhost, Supabase internal, etc.).
+function validateExternalUrl(raw: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    throw new Error("Invalid URL")
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Only HTTP/HTTPS URLs are allowed")
+  }
+
+  const hostname = parsed.hostname.toLowerCase()
+
+  // Block loopback, link-local, and private RFC-1918 ranges.
+  // IPv6 loopback (::1) is also blocked via the literal check.
+  const blocked =
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    // IPv4 literal check — works even if the client zero-pads octets
+    /^0+\./.test(hostname) ||                         // 0.x.x.x
+    /^127\./.test(hostname) ||                        // loopback
+    /^10\./.test(hostname) ||                         // private class-A
+    /^192\.168\./.test(hostname) ||                   // private class-C
+    /^169\.254\./.test(hostname) ||                   // link-local / cloud metadata
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||   // private class-B
+    /^fc00:/i.test(hostname) ||                       // IPv6 private
+    /^fe80:/i.test(hostname)                          // IPv6 link-local
+
+  if (blocked) {
+    throw new Error("Access to private/internal addresses is not allowed")
+  }
+
+  return parsed.toString()
+}
+
 export async function scrapeProductUrl(url: string): Promise<{
   title?: string | null
   image?: string | null
@@ -100,7 +139,7 @@ export async function scrapeProductUrl(url: string): Promise<{
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = "https://" + url
     }
-    new URL(url)
+    url = validateExternalUrl(url)
 
     const res = await fetch(url, {
       signal: AbortSignal.timeout(10000),
@@ -296,6 +335,7 @@ export async function createWish(formData: FormData) {
 
   revalidatePath(`/wishlists/${wishlistId}`)
   revalidatePath("/dashboard")
+  revalidatePath("/activity")
   return { success: true }
 }
 
@@ -362,9 +402,23 @@ export async function markAsReceived(wishId: string, wishlistId: string) {
     .eq("id", wishId)
   if (error) return { error: error.message }
 
+  // Activity feed: deliberately discreet — no wish title, no buyer name.
+  // Friends should see "X received a gift" without spoiling who bought what.
+  // Skip if the parent wishlist is private.
+  const { data: wl } = await supabase
+    .from("wishlists").select("visibility").eq("id", wishlistId).single()
+  if (wl && wl.visibility !== "private") {
+    await supabase.from("activity").insert({
+      user_id:   user.id,
+      type:      "wish_received",
+      target_id: wishlistId,
+      meta:      {},
+    })
+  }
+
   revalidatePath(`/wishlists/${wishlistId}`)
-  revalidatePath("/dashboard")
   revalidatePath("/reservations")
+  revalidatePath("/activity")
   return { success: true }
 }
 
@@ -441,6 +495,29 @@ export async function reserveWish(wishId: string, wishlistId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "Not authenticated" }
 
+  // Fetch the wishlist owner so we can enforce friends-only reservations
+  const { data: wishRow } = await supabase
+    .from("wishes")
+    .select("wishlists!inner(user_id)")
+    .eq("id", wishId)
+    .single()
+
+  const ownerId = (wishRow?.wishlists as any)?.user_id as string | undefined
+  if (!ownerId) return { error: "Wish not found" }
+  if (ownerId === user.id) return { error: "You cannot reserve your own wishes" }
+
+  const { data: friendship } = await supabase
+    .from("friendships")
+    .select("id")
+    .or(
+      `and(requester_id.eq.${user.id},addressee_id.eq.${ownerId}),` +
+      `and(requester_id.eq.${ownerId},addressee_id.eq.${user.id})`
+    )
+    .eq("status", "accepted")
+    .maybeSingle()
+
+  if (!friendship) return { error: "Only friends can reserve wishes" }
+
   const { error } = await supabase.from("reservations").insert({
     wish_id:     wishId,
     reserved_by: user.id,
@@ -466,8 +543,30 @@ export async function markAsBought(reservationId: string, wishlistId: string) {
     .eq("reserved_by", user.id)
   if (error) return { error: error.message }
 
+  // Notify the wishlist owner that their wish was bought.
+  // Fetch wish + owner from the reservation so we know who to notify.
+  const { data: res } = await supabase
+    .from("reservations")
+    .select("wish:wish_id(id, title, wishlist:wishlist_id(id, user_id))")
+    .eq("id", reservationId)
+    .single()
+
+  const wish    = (res?.wish as any)
+  const ownerId = wish?.wishlist?.user_id as string | undefined
+
+  if (ownerId && ownerId !== user.id) {
+    await supabase.from("notifications").insert({
+      user_id:  ownerId,
+      type:     "wish_bought",
+      actor_id: user.id,
+      target_id: wish.id,
+      meta: { wish_title: wish.title, wishlist_id: wishlistId },
+    })
+  }
+
   revalidatePath(`/wishlists/${wishlistId}`)
   revalidatePath("/reservations")
+  revalidatePath("/dashboard")
   return { success: true }
 }
 

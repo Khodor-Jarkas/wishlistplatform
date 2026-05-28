@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { signOut } from "@/lib/actions/auth"
-import { getInitials } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
+import { getInitials, staticAvatarUrl } from "@/lib/utils"
 import Drawer from "@/components/ui/Drawer"
 import type { Profile } from "@/types"
 
@@ -14,9 +15,11 @@ interface Props {
 }
 
 const quickLinks = [
+  { icon: "📋", label: "Wishlists",    href: "/dashboard"    },
   { icon: "🔖", label: "Reservations", href: "/reservations" },
+  { icon: "✨", label: "Inspiration",  href: "/inspire"      },
   { icon: "👥", label: "Friends",      href: "/friends"      },
-  { icon: "📋", label: "Activity",     href: "/activity"     },
+  { icon: "🌱", label: "Activity",     href: "/activity"     },
   { icon: "👤", label: "Account",      href: "/profile"      },
 ]
 
@@ -46,7 +49,7 @@ export default function ProfilePanel({ open, onClose, profile, email }: Props) {
             overflow: "hidden",
           }}>
             {profile.avatar_url
-              ? <img src={profile.avatar_url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ? <img src={staticAvatarUrl(profile.avatar_url)!} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               : initials}
           </div>
           <div style={{ minWidth: 0 }}>
@@ -102,22 +105,32 @@ export default function ProfilePanel({ open, onClose, profile, email }: Props) {
           <span style={{ color: "#94A3B8" }}>›</span>
         </Link>
 
-        {/* Log out */}
-        <form action={signOut}>
-          <button
-            type="submit"
-            style={{
-              width: "100%", padding: "14px",
-              background: "#0F172A", color: "white",
-              border: "none", borderRadius: 12,
-              fontWeight: 700, fontSize: 14,
-              letterSpacing: "0.05em", cursor: "pointer",
-              marginTop: 4,
-            }}
-          >
-            LOG OUT
-          </button>
-        </form>
+        {/* Log out — must AWAIT both signOuts before navigating:
+              - client signOut clears document.cookie + fires SIGNED_OUT to listeners
+              - server signOut returns Set-Cookie response that clears the SSR cookie
+            Fire-and-forget on the server signOut races with the navigation, so the
+            response cookies don't get applied before the browser leaves the page —
+            the next request still carries the auth cookie and the AppHeader server
+            component re-renders as logged-in. Cachebust query defeats bfcache. */}
+        <button
+          type="button"
+          onClick={async () => {
+            const supabase = createClient()
+            await supabase.auth.signOut()
+            try { await signOut() } catch { /* server action throws NEXT_REDIRECT — ignore */ }
+            window.location.replace("/?_=" + Date.now())
+          }}
+          style={{
+            width: "100%", padding: "14px",
+            background: "#0F172A", color: "white",
+            border: "none", borderRadius: 12,
+            fontWeight: 700, fontSize: 14,
+            letterSpacing: "0.05em", cursor: "pointer",
+            marginTop: 4,
+          }}
+        >
+          LOG OUT
+        </button>
       </div>
     </Drawer>
   )

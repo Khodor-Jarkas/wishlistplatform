@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { getInitials } from "@/lib/utils"
+import { getInitials, staticAvatarUrl } from "@/lib/utils"
 import { WISHLIST_COLOR_PRESETS } from "@/components/wishlist/WishlistCard"
 import type { TrendingWishlist } from "@/lib/actions/inspire"
 
@@ -60,6 +60,7 @@ export default function TrendingCard({ wl }: { wl: TrendingWishlist }) {
             <img
               src={wl.cover_image_url}
               alt={wl.title}
+              loading="lazy"
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           )}
@@ -99,7 +100,7 @@ export default function TrendingCard({ wl }: { wl: TrendingWishlist }) {
           </p>
 
           {/* Owner row */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <div style={{
               width: 24, height: 24, borderRadius: "50%", background: "#38A3C7",
               overflow: "hidden", flexShrink: 0,
@@ -107,12 +108,25 @@ export default function TrendingCard({ wl }: { wl: TrendingWishlist }) {
               color: "white", fontSize: 10, fontWeight: 700,
             }}>
               {wl.profile?.avatar_url
-                ? <img src={wl.profile.avatar_url} alt={ownerName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ? <img src={staticAvatarUrl(wl.profile.avatar_url)!} alt={ownerName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 : initials}
             </div>
-            <span style={{ fontSize: 12, color: "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 12, color: "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
               {ownerName}
             </span>
+            {wl.profile?.is_creator && (
+              <span
+                title="Featured Creator"
+                style={{
+                  fontSize: 9, fontWeight: 800, letterSpacing: "0.06em",
+                  color: "#B45309", background: "#FEF3C7",
+                  padding: "2px 6px", borderRadius: 6,
+                  flexShrink: 0,
+                }}
+              >
+                ★ CREATOR
+              </span>
+            )}
           </div>
 
           {/* Stats */}

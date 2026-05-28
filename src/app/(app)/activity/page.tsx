@@ -3,29 +3,16 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import Container from "@/components/ui/Container"
 import EmptyState from "@/components/ui/EmptyState"
-import { getInitials } from "@/lib/utils"
+import { getInitials, getDisplayName, getDateLabel, staticAvatarUrl } from "@/lib/utils"
 import type { Activity } from "@/types"
 
 // ── Activity type config ─────────────────────────────────────
-const typeConfig: Record<string, { color: string; bg: string; icon: string }> = {
-  wishlist_created:  { color: "#8B5CF6", bg: "#F3E8FF", icon: "📋" },
-  wish_added:        { color: "#38A3C7", bg: "#E0F4FA", icon: "✨" },
-  friendship_started:{ color: "#10B981", bg: "#D1FAE5", icon: "🤝" },
-}
-
-// ── Date grouping ────────────────────────────────────────────
-function getDateLabel(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const yesterday = new Date(today.getTime() - 86400000)
-  const weekAgo   = new Date(today.getTime() - 7 * 86400000)
-  const item = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-
-  if (item.getTime() === today.getTime())     return "Today"
-  if (item.getTime() === yesterday.getTime()) return "Yesterday"
-  if (item.getTime() > weekAgo.getTime())     return "This week"
-  return d.toLocaleDateString("en-US", { month: "long", day: "numeric" })
+const typeConfig: Record<string, { color: string; bg: string; icon: string; label: string }> = {
+  wishlist_created:   { color: "#8B5CF6", bg: "#F3E8FF", icon: "📋", label: "List"    },
+  wish_added:         { color: "#38A3C7", bg: "#E0F4FA", icon: "✨", label: "Wish"    },
+  friendship_started: { color: "#10B981", bg: "#D1FAE5", icon: "🤝", label: "Friend"  },
+  became_creator:     { color: "#F59E0B", bg: "#FEF3C7", icon: "🌟", label: "Creator" },
+  wish_received:      { color: "#EC4899", bg: "#FCE7F3", icon: "🎁", label: "Gift"    },
 }
 
 function timeAgo(dateStr: string): string {
@@ -46,13 +33,37 @@ export default async function ActivityPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/")
 
+  // Pull accepted friend IDs so the feed shows self + friends, not all users.
+  const { data: friendships } = await supabase
+    .from("friendships")
+    .select("requester_id, addressee_id")
+    .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
+    .eq("status", "accepted")
+
+  const friendIds = (friendships ?? []).map((f) =>
+    f.requester_id === user.id ? f.addressee_id : f.requester_id
+  )
+  const visibleUserIds = [user.id, ...friendIds]
+  const friendIdSet = new Set<string>(friendIds)
+
   const { data: raw } = await supabase
     .from("activity")
     .select("*, profile:user_id(id, username, first_name, last_name, avatar_url)")
+    .in("user_id", visibleUserIds)
     .order("created_at", { ascending: false })
     .limit(60)
 
-  const activities = (raw ?? []) as (Activity & { profile: any })[]
+  // Deduplicate: for wishlist_created rows with the same target_id (happens when
+  // both the creator and a collaborator are friends with the viewer), keep only
+  // the first occurrence (sorted DESC so creator's row comes first).
+  const seenWishlistCreated = new Set<string>()
+  const activities = ((raw ?? []) as (Activity & { profile: any })[]).filter((a) => {
+    if (a.type === "wishlist_created" && a.target_id) {
+      if (seenWishlistCreated.has(a.target_id)) return false
+      seenWishlistCreated.add(a.target_id)
+    }
+    return true
+  })
 
   // Group by date label, preserving order
   const groups: { label: string; items: typeof activities }[] = []
@@ -69,7 +80,7 @@ export default async function ActivityPage() {
   return (
     <main style={{ minHeight: "100vh", background: "#F8FAFC", paddingBottom: 80 }}>
       <Container>
-        <div style={{ paddingTop: 48, maxWidth: 620, margin: "0 auto" }}>
+        <div style={{ paddingTop: "clamp(28px, 5vw, 48px)", maxWidth: 620, margin: "0 auto" }}>
 
           {/* Header */}
           <div style={{ marginBottom: 36 }}>
@@ -114,6 +125,7 @@ export default async function ActivityPage() {
                         key={a.id}
                         activity={a}
                         currentUserId={user.id}
+                        friendIdSet={friendIdSet}
                         isLast={i === group.items.length - 1}
                       />
                     ))}
@@ -131,30 +143,60 @@ export default async function ActivityPage() {
 
 // ── Activity card ─────────────────────────────────────────────
 function ActivityCard({
-  activity, currentUserId, isLast,
+  activity, currentUserId, friendIdSet, isLast,
 }: {
   activity: Activity & { profile: any }
   currentUserId: string
+  friendIdSet: Set<string>
   isLast: boolean
 }) {
   const profile     = activity.profile
   const isMe        = activity.user_id === currentUserId
-  const meta        = (activity.meta ?? {}) as Record<string, string>
+  const meta        = (activity.meta ?? {}) as Record<string, any>
   const cfg         = typeConfig[activity.type] ?? { color: "#64748B", bg: "#F1F5F9", icon: "📌" }
 
-  const displayName = isMe
-    ? "You"
-    : profile?.first_name
-      ? `${profile.first_name} ${profile.last_name ?? ""}`.trim()
-      : profile?.username ?? "Someone"
+  const displayName = isMe ? "You" : getDisplayName(profile)
 
   const initials = getInitials(profile ?? {})
 
   function renderBody() {
     switch (activity.type) {
-      case "wishlist_created":
+      case "wishlist_created": {
+        // Build co-creator text based on friendship visibility
+        const otherNames: Record<string, string>    = meta.other_participant_names     ?? {}
+        const otherUsernames: Record<string, string> = meta.other_participant_usernames ?? {}
+        const otherIds = Object.keys(otherNames)
+
+        const visibleIds = otherIds.filter(
+          (id) => id === currentUserId || friendIdSet.has(id)
+        )
+        const hiddenCount = otherIds.length - visibleIds.length
+
+        // Build the "& X" suffix
+        let coCreatorSuffix: React.ReactNode = null
+        if (visibleIds.length > 0 || hiddenCount > 0) {
+          const parts: React.ReactNode[] = visibleIds.map((id, i) => {
+            const name     = otherNames[id] === "You" || id === currentUserId ? "you" : otherNames[id]
+            const username = otherUsernames[id]
+            return (
+              <span key={id}>
+                {i > 0 && ", "}
+                {username
+                  ? <Link href={`/users/${username}`} style={{ color: cfg.color, fontWeight: 600, textDecoration: "none" }}>{name}</Link>
+                  : <strong>{name}</strong>
+                }
+              </span>
+            )
+          })
+          if (hiddenCount > 0) {
+            parts.push(<span key="hidden">{visibleIds.length > 0 ? ` and ${hiddenCount} other${hiddenCount > 1 ? "s" : ""}` : `${hiddenCount} other${hiddenCount > 1 ? "s" : ""}`}</span>)
+          }
+          coCreatorSuffix = <span> &amp; {parts}</span>
+        }
+
         return (
           <span>
+            {coCreatorSuffix}
             {" "}created the wishlist{" "}
             {activity.target_id
               ? <Link href={`/wishlists/${activity.target_id}`} style={{ color: cfg.color, fontWeight: 600, textDecoration: "none" }}>{meta.title ?? "a wishlist"}</Link>
@@ -162,6 +204,7 @@ function ActivityCard({
             }
           </span>
         )
+      }
       case "wish_added":
         return (
           <span>
@@ -190,6 +233,23 @@ function ActivityCard({
           </span>
         )
       }
+      case "became_creator":
+        return <span>{" "}became a <strong style={{ color: cfg.color }}>Creator</strong> 🌟</span>
+      case "wish_received":
+        return (
+          <span>
+            {" "}received a gift
+            {activity.target_id && (
+              <span>
+                {" "}from{" "}
+                <Link href={`/wishlists/${activity.target_id}`} style={{ color: cfg.color, fontWeight: 600, textDecoration: "none" }}>
+                  their wishlist
+                </Link>
+              </span>
+            )}
+            {" "}🎁
+          </span>
+        )
       default:
         return null
     }
@@ -211,7 +271,7 @@ function ActivityCard({
           color: "white", fontWeight: 700, fontSize: 14,
         }}>
           {profile?.avatar_url
-            ? <img src={profile.avatar_url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ? <img src={staticAvatarUrl(profile.avatar_url)!} alt={displayName} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             : initials}
         </div>
         {/* Activity type badge */}
@@ -256,9 +316,7 @@ function ActivityCard({
         letterSpacing: "0.04em", textTransform: "uppercase",
         alignSelf: "flex-start", marginTop: 2,
       }}>
-        {activity.type === "wishlist_created"   ? "List"   :
-         activity.type === "wish_added"          ? "Wish"   :
-         activity.type === "friendship_started"  ? "Friend" : ""}
+        {cfg.label}
       </div>
 
     </div>

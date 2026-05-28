@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react"
 import { useEffect, useRef, useState, useTransition } from "react"
+import Link from "next/link"
+import { toast } from "sonner"
 import {
   deleteWish,
   toggleMostWanted,
@@ -13,7 +15,6 @@ import {
 } from "@/lib/actions/wishes"
 import { formatPrice } from "@/lib/utils"
 import { useAuthModal } from "@/context/AuthModalContext"
-import { useUser } from "@/hooks/useUser"
 import type { Wish } from "@/types"
 
 // ── Icons ────────────────────────────────────────────────────
@@ -99,6 +100,7 @@ interface Props {
   isOwner: boolean
   currentUserId: string | null
   userWishlists?: { id: string; title: string }[]
+  isFriend?: boolean
   onEditRequest: (wish: Wish) => void
 }
 
@@ -109,14 +111,13 @@ export default function WishCard({
   isOwner,
   currentUserId,
   userWishlists = [],
+  isFriend = false,
   onEditRequest,
 }: Props) {
   const { openLogin }                 = useAuthModal()
-  const { user: clientUser }          = useUser()
   const [menuOpen, setMenuOpen]       = useState(false)
   const [showMove, setShowMove]       = useState(false)
   const [showCopyTo, setShowCopyTo]   = useState(false)
-  const [wishCopied, setWishCopied]   = useState(false)
   const [deleting, setDeleting]       = useState(false)
   const [cardHovered, setCardHovered] = useState(false)
   const [touchDevice, setTouchDevice] = useState(false)
@@ -125,17 +126,30 @@ export default function WishCard({
   const menuRef                       = useRef<HTMLDivElement>(null)
   const leaveTimer                    = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Use client-side user as fallback in case server-side auth didn't resolve
-  const effectiveUserId = clientUser?.id ?? currentUserId
+  const effectiveUserId = currentUserId
   const reservation     = (wish.reservations ?? [])[0] ?? null
   // Prefer server-computed value; fall back to join data + client user
-  const isReservedByMe  = wish.isReservedByMe
+  const serverIsReservedByMe = wish.isReservedByMe
     ?? (!!reservation && reservation.reserved_by === effectiveUserId)
-  const isBoughtByMe    = isReservedByMe && reservation?.status === "bought"
+
+  // Optimistic reserve/unreserve state — flip the UI instantly when the user
+  // clicks Reserve/Unreserve, then reset to server truth on the next render
+  // (revalidatePath in the server action triggers wish prop to refresh).
+  const [optimisticReserve, setOptimisticReserve] = useState<{ is_reserved: boolean; isReservedByMe: boolean } | null>(null)
+  useEffect(() => { setOptimisticReserve(null) }, [wish.is_reserved, wish.isReservedByMe])
+
+  const isReservedByMe = optimisticReserve?.isReservedByMe ?? serverIsReservedByMe
+  const wishIsReserved = optimisticReserve?.is_reserved   ?? wish.is_reserved
+  const isBoughtByMe   = isReservedByMe && reservation?.status === "bought"
   const isMostWanted   = wish.priority === 2
 
-  // Detect touch device on first touch — show button permanently on mobile
+  // Detect touch device immediately on mount via coarse-pointer media query.
+  // Also listen for the first touchstart as a fallback for unusual UA strings.
   useEffect(() => {
+    if (window.matchMedia("(pointer: coarse)").matches) {
+      setTouchDevice(true)
+      return
+    }
     function onTouch() { setTouchDevice(true) }
     window.addEventListener("touchstart", onTouch, { once: true, passive: true })
     return () => window.removeEventListener("touchstart", onTouch)
@@ -179,45 +193,69 @@ export default function WishCard({
 
   function handleToggleMostWanted() {
     setMenuOpen(false)
-    start(() => void toggleMostWanted(wish.id, wishlistId, isMostWanted))
+    const willBeMostWanted = !isMostWanted
+    start(async () => {
+      await toggleMostWanted(wish.id, wishlistId, isMostWanted)
+      toast(willBeMostWanted ? "Marked as most wanted ⭐" : "Removed from most wanted")
+    })
   }
   function handleMarkReceived() {
     setMenuOpen(false)
-    start(() => void markAsReceived(wish.id, wishlistId))
+    start(async () => {
+      await markAsReceived(wish.id, wishlistId)
+      toast.success("Marked as received 🎁")
+    })
   }
   function handleDelete() {
     if (!deleting) { setDeleting(true); return }
     setMenuOpen(false)
     setDeleting(false)
-    start(() => void deleteWish(wish.id, wishlistId))
+    start(async () => {
+      await deleteWish(wish.id, wishlistId)
+      toast("Wish deleted")
+    })
   }
   function handleMove(newWishlistId: string) {
     setMenuOpen(false)
     setShowMove(false)
-    start(() => void moveWish(wish.id, newWishlistId, wishlistId))
+    start(async () => {
+      await moveWish(wish.id, newWishlistId, wishlistId)
+      toast.success("Wish moved!")
+    })
   }
   function handleCopyTo(targetWishlistId: string) {
     setMenuOpen(false)
     setShowCopyTo(false)
     start(async () => {
       const res = await copyWishToList(wish.id, targetWishlistId)
-      if (!res?.error) {
-        setWishCopied(true)
-        setTimeout(() => setWishCopied(false), 2000)
-      }
+      if (!res?.error) toast.success("Added to your wishlist!")
+      else toast.error("Failed to copy wish")
     })
   }
   function handleReserve() {
     setMenuOpen(false)
-    start(() => void reserveWish(wish.id, wishlistId))
+    if (!effectiveUserId) { openLogin(); return }
+    setOptimisticReserve({ is_reserved: true, isReservedByMe: true })
+    start(async () => {
+      const res = await reserveWish(wish.id, wishlistId)
+      if (res?.error) { setOptimisticReserve(null); toast.error("Failed to reserve") }
+      else toast.success("Reserved! 🎁")
+    })
   }
   function handleUnreserve() {
     setMenuOpen(false)
-    start(() => void unreserveWish(wish.id, wishlistId))
+    if (!effectiveUserId) { openLogin(); return }
+    setOptimisticReserve({ is_reserved: false, isReservedByMe: false })
+    start(async () => {
+      const res = await unreserveWish(wish.id, wishlistId)
+      if (res?.error) { setOptimisticReserve(null); toast.error("Failed to remove reservation") }
+      else toast("Reservation removed")
+    })
   }
   function handleShare() {
     setMenuOpen(false)
     navigator.clipboard.writeText(`${window.location.origin}/wishlists/${wishlistId}`)
+    toast.success("Link copied!")
   }
 
   const otherWishlists = userWishlists.filter((w) => w.id !== wishlistId)
@@ -228,18 +266,25 @@ export default function WishCard({
       onMouseEnter={handleCardEnter}
       onMouseLeave={handleCardLeave}
     >
-      {/* ── Image area (clean — no overlapping UI) ── */}
-      <div style={{
-        position: "relative",
-        borderRadius: 12,
-        overflow: "hidden",
-        aspectRatio: "3/4",
-        background: "transparent",
-      }}>
+      {/* ── Image area (clickable — opens wish detail page) ── */}
+      <Link
+        href={`/wishes/${wish.id}`}
+        aria-label={`View details for ${wish.title}`}
+        style={{
+          position: "relative",
+          display: "block",
+          borderRadius: 12,
+          overflow: "hidden",
+          aspectRatio: "3/4",
+          background: "transparent",
+          textDecoration: "none",
+        }}
+      >
         {wish.image_url ? (
           <img
             src={wish.image_url}
             alt={wish.title}
+            loading="lazy"
             style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
           />
         ) : (
@@ -267,7 +312,7 @@ export default function WishCard({
         )}
 
         {/* Reserved / Bought overlay (visitors only) */}
-        {!isOwner && wish.is_reserved && (
+        {!isOwner && wishIsReserved && (
           <div style={{
             position: "absolute", inset: 0,
             background: isBoughtByMe ? "rgba(16,185,129,0.55)" : "rgba(0,0,0,0.45)",
@@ -292,26 +337,61 @@ export default function WishCard({
             </span>
           </div>
         )}
-      </div>
+      </Link>
 
       {/* ── Info row + ··· menu (below the image) ── */}
       <div style={{ marginTop: 8, display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0 }}>
 
         {/* Title + price */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{
-            fontSize: 13, fontWeight: 500, color: "#0F172A", margin: "0 0 2px",
-            lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis",
-            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-          }}>
+          <Link
+            href={`/wishes/${wish.id}`}
+            style={{
+              display: "-webkit-box",
+              fontSize: 13, fontWeight: 500, color: "#0F172A", margin: "0 0 2px",
+              lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis",
+              WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              textDecoration: "none",
+            }}
+          >
             {wish.title}
-          </p>
+          </Link>
           {wish.price != null && (
             <p style={{ fontSize: 13, color: "#64748B", margin: 0, fontWeight: 500 }}>
               {formatPrice(wish.price, wish.currency)}
             </p>
           )}
         </div>
+
+        {/* Quick-edit pencil — owners only. Skips the dropdown for the
+            most common owner action so editing a wish is one click. */}
+        {isOwner && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              cancelLeave()
+              onEditRequest(wish)
+            }}
+            aria-label="Edit wish"
+            title="Edit wish"
+            style={{
+              width: 28, height: 28, borderRadius: 8,
+              background: "transparent",
+              border: "1px solid transparent",
+              cursor: "pointer", flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#64748B",
+              opacity: cardHovered || touchDevice || menuOpen ? 1 : 0,
+              transition: "opacity 0.15s, background 0.1s, border-color 0.1s",
+              pointerEvents: cardHovered || touchDevice || menuOpen ? "auto" : "none",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = "#E2E8F0" }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent" }}
+          >
+            <IconEdit />
+          </button>
+        )}
 
         {/* ··· button — fades in on card hover, dropdown opens upward */}
         <div
@@ -435,7 +515,7 @@ export default function WishCard({
                     <>
                       <MenuItem
                         icon={<IconBookmarkPlus />}
-                        label={wishCopied ? "✓ Added!" : "Add to my wishlist"}
+                        label="Add to my wishlist"
                         onClick={() => {
                           if (!effectiveUserId) { setMenuOpen(false); openLogin(); return }
                           if (userWishlists.length > 0) setShowCopyTo(true)
@@ -449,14 +529,11 @@ export default function WishCard({
                       {isReservedByMe ? (
                         <MenuItem icon={<IconXMark />} label="Remove my reservation" onClick={handleUnreserve} danger />
                       ) : (
-                        !wish.is_reserved && (
+                        effectiveUserId && !wishIsReserved && isFriend && (
                           <MenuItem
                             icon={<IconCheck />}
                             label="Reserve this wish"
-                            onClick={() => {
-                              if (!effectiveUserId) { setMenuOpen(false); openLogin(); return }
-                              handleReserve()
-                            }}
+                            onClick={handleReserve}
                           />
                         )
                       )}

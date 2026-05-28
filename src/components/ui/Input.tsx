@@ -18,7 +18,7 @@ export default function Input({ label, error, className = "", ...props }: Props)
           padding: "12px 14px",
           border: error ? "1px solid #EF4444" : "1px solid #E2E8F0",
           borderRadius: 8,
-          fontSize: 14,
+          fontSize: 16, // 16px prevents Android Chrome auto-zoom on focus
           color: "#0F172A",
           background: "white",
           outline: "none",

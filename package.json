@@ -1,6 +1,6 @@
 {
   "name": "wishit",
-  "version": "0.1.0",
+  "version": "0.3.2",
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max_old_space_size=4096 next dev",
@@ -13,13 +13,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.88.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "next": "16.1.6",
     "openai": "^6.34.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

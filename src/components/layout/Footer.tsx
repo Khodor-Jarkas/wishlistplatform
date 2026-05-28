@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useIsTablet, useIsMobile } from "@/lib/hooks/useMediaQuery"
+import { APP_VERSION } from "@/lib/version"
 
 const InstagramIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -139,6 +140,9 @@ export default function Footer() {
         }}>
           <p style={{ fontSize: 13, color: "#475569", margin: 0 }}>
             © {new Date().getFullYear()} Wish It. All rights reserved.
+            <span style={{ marginLeft: 10, color: "#334155", fontSize: 12, fontFamily: "var(--font-mono)" }}>
+              v{APP_VERSION}
+            </span>
           </p>
           <div style={{ display: "flex", gap: isMobile ? 14 : 24, flexWrap: "wrap", justifyContent: "center" }}>
             {["Privacy Policy", "Terms of Service", "Cookie Settings"].map((item) => (

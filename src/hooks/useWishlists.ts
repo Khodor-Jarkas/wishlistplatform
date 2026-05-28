@@ -22,14 +22,17 @@ export function useWishlists(): { wishlists: WishlistWithCounts[]; loading: bool
 
       const { data: raw } = await supabase
         .from("wishlists")
-        .select("*, wishes(count), wishlist_followers(count)")
+        .select("*, wishes(id, reservations(status)), wishlist_followers(count)")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
 
       setWishlists(
         (raw ?? []).map((w: any) => ({
           ...w,
-          wish_count: w.wishes?.[0]?.count ?? 0,
+          wish_count: (w.wishes ?? []).filter((wish: any) => {
+            const res = (wish.reservations ?? [])[0]
+            return !res || res.status !== "bought"
+          }).length,
           follower_count: w.wishlist_followers?.[0]?.count ?? 0,
         }))
       )

@@ -1,16 +1,38 @@
-import type { ReactNode } from "react"
+import { type ReactNode, Suspense } from "react"
+import dynamic from "next/dynamic"
 import AppHeader from "@/components/layout/AppHeader"
 import Footer from "@/components/layout/Footer"
+import MobileBottomNav from "@/components/layout/MobileBottomNav"
 import { AddWishModalProvider } from "@/context/AddWishModalContext"
-import AddWishModal from "@/components/wishlist/AddWishModal"
+
+const AddWishModal = dynamic(() => import("@/components/wishlist/AddWishModal"))
+
+// Shown while AppHeader's async profile fetch resolves. Matches the header
+// height so the layout doesn't shift when the real header streams in.
+function AppHeaderFallback() {
+  return (
+    <div style={{
+      height: "clamp(64px, 8vw, 72px)",
+      background: "white",
+      borderBottom: "1px solid #E2E8F0",
+      position: "relative",
+      zIndex: 100,
+    }} />
+  )
+}
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <AddWishModalProvider>
-      <AppHeader />
+      <Suspense fallback={<AppHeaderFallback />}>
+        <AppHeader />
+      </Suspense>
       {children}
       <Footer />
-      <AddWishModal />
+      <MobileBottomNav />
+      <Suspense fallback={null}>
+        <AddWishModal />
+      </Suspense>
     </AddWishModalProvider>
   )
 }

@@ -1,21 +1,22 @@
 "use client"
 
 import { useEffect, useRef, useState, useTransition } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient, withQueryTimeout } from "@/lib/supabase/client"
 import { createWish, scrapeProductUrl } from "@/lib/actions/wishes"
 import { useAddWishModal } from "@/context/AddWishModalContext"
-import { useIsMobile } from "@/lib/hooks/useMediaQuery"
-
-const CURRENCIES = ["USD", "EUR", "GBP", "LBP", "AED", "SAR"]
+import { useUser } from "@/hooks/useUser"
+import { compressImage, withUploadTimeout } from "@/lib/utils/image"
+import { CURRENCIES } from "@/lib/currencies"
 
 interface Wishlist { id: string; title: string }
 
 export default function AddWishModal() {
   const { isOpen, close, defaultWishlistId } = useAddWishModal()
-  const isMobile = useIsMobile()
+  const { user } = useUser()
 
   const [step, setStep]                 = useState<"link" | "manual">("link")
-  const [wishlists, setWishlists]       = useState<Wishlist[]>([])
+  const [wishlists, setWishlists]         = useState<Wishlist[]>([])
+  const [loadingWishlists, setLoadingWishlists] = useState(false)
   const [wishlistId, setWishlistId]     = useState("")
   const [isMostWanted, setIsMostWanted] = useState(false)
   const [currency, setCurrency]         = useState("USD")
@@ -33,8 +34,14 @@ export default function AddWishModal() {
   const [scraping, setScraping]         = useState(false)
   const [scrapeError, setScrapeError]   = useState("")
   const [error, setError]               = useState("")
+  const [imageInputKey, setImageInputKey] = useState(0)
   const [isPending, start]              = useTransition()
   const pasteRef = useRef<HTMLInputElement>(null)
+
+  // Revoke stale blob URL when preview is replaced or on unmount.
+  useEffect(() => {
+    return () => { if (imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview) }
+  }, [imagePreview])
 
   // Reset when modal opens
   useEffect(() => {
@@ -55,23 +62,34 @@ export default function AddWishModal() {
     setError("")
 
     // Fetch user's wishlists
+    setLoadingWishlists(true)
     ;(async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data } = await supabase
-        .from("wishlists")
-        .select("id, title")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-      if (data) {
-        setWishlists(data)
-        // Pre-select the wishlist the user opened the modal from, or default to first
-        const preferred = defaultWishlistId && data.find((w) => w.id === defaultWishlistId)
-        setWishlistId(preferred ? preferred.id : (data[0]?.id ?? ""))
+      try {
+        if (!user) { setWishlists([]); return }
+        const supabase = createClient()
+
+        const { data, error: queryError } = await withQueryTimeout(
+          supabase
+            .from("wishlists")
+            .select("id, title")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false })
+        )
+
+        if (queryError) console.warn("[AddWishModal] wishlists query error", queryError)
+
+        const list = data ?? []
+        setWishlists(list)
+        // Pre-select the wishlist the user opened the modal from, or default to first.
+        const preferred = defaultWishlistId && list.find((w) => w.id === defaultWishlistId)
+        setWishlistId(preferred ? preferred.id : (list[0]?.id ?? ""))
+      } catch (e) {
+        console.warn("[AddWishModal] wishlists fetch threw", e)
+      } finally {
+        setLoadingWishlists(false)
       }
     })()
-  }, [isOpen, defaultWishlistId])
+  }, [isOpen, defaultWishlistId, user?.id])
 
   async function handleContinueFromLink() {
     const url = linkValue.trim()
@@ -110,21 +128,29 @@ export default function AddWishModal() {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setUploading(false); return }
-    const ext  = file.name.split(".").pop()
-    const path = `${user.id}/wish-${Date.now()}.${ext}`
-    const { error: uploadError } = await supabase.storage
-      .from("wishlist-covers").upload(path, file, { upsert: true })
-    if (uploadError) { setError("Upload failed: " + uploadError.message); setUploading(false); return }
-    const { data: { publicUrl } } = supabase.storage.from("wishlist-covers").getPublicUrl(path)
-    setImageUrl(publicUrl)
-    setImagePreview(URL.createObjectURL(file))
-    setUploading(false)
+    setError("")
+    try {
+      if (!user) { setError("Please log in again."); return }
+      const supabase = createClient()
+      // Compress before upload (falls back to original on decode failure).
+      const { blob, contentType, ext } = await compressImage(file)
+      const path = `${user.id}/wish-${Date.now()}.${ext}`
+      const { error: uploadError } = await withUploadTimeout(
+        supabase.storage.from("wishlist-covers").upload(path, blob, { upsert: true, contentType })
+      )
+      if (uploadError) { setError("Upload failed: " + uploadError.message); return }
+      const { data: { publicUrl } } = supabase.storage.from("wishlist-covers").getPublicUrl(path)
+      setImageUrl(publicUrl)
+      setImagePreview(URL.createObjectURL(blob))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed.")
+      console.error("[AddWishModal] image upload failed", err)
+    } finally {
+      setUploading(false)
+    }
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     setError("")
     const fd = new FormData(e.currentTarget)
@@ -159,6 +185,7 @@ export default function AddWishModal() {
       {/* Backdrop */}
       <div
         onClick={close}
+        className="wi-anim-fade"
         style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
           zIndex: 500, backdropFilter: "blur(2px)",
@@ -167,9 +194,9 @@ export default function AddWishModal() {
 
       {/* Modal */}
       <div
+        className="wi-anim-modal-centered"
         style={{
           position: "fixed", top: "50%", left: "50%",
-          transform: "translate(-50%, -50%)",
           zIndex: 501,
           background: "white",
           borderRadius: 16,
@@ -234,13 +261,16 @@ export default function AddWishModal() {
               <button
                 type="button"
                 onClick={handlePaste}
+                aria-label="Paste"
                 onMouseEnter={(e) => (e.currentTarget.style.background = "#2980b9")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "#38A3C7")}
                 style={{
                   background: "#38A3C7", border: "none", color: "white",
                   fontWeight: 700, fontSize: 12, letterSpacing: "0.08em",
-                  padding: "10px 18px", cursor: "pointer", flexShrink: 0,
+                  padding: "10px 18px",
+                  cursor: "pointer", flexShrink: 0,
                   borderRadius: 7, transition: "background 0.15s",
+                  display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >
                 PASTE
@@ -287,8 +317,8 @@ export default function AddWishModal() {
 
         {/* ── Step 2: Manual form ── */}
         {step === "manual" && (
-          <form onSubmit={handleSubmit} style={{ padding: isMobile ? "20px 20px 24px" : "20px 24px 28px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 18 : 28 }}>
+          <form onSubmit={handleSubmit} className="wi-add-wish-grid">
+            <div style={{ display: "contents" }}>
 
               {/* Left column */}
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -296,22 +326,50 @@ export default function AddWishModal() {
                 {/* Choose wishlist */}
                 <div>
                   <label style={labelStyle}>Choose wishlist</label>
-                  <div style={{ position: "relative" }}>
-                    <select
-                      value={wishlistId}
-                      onChange={(e) => setWishlistId(e.target.value)}
-                      style={selectStyle}
-                      required
-                    >
-                      {wishlists.map((w) => (
-                        <option key={w.id} value={w.id}>{w.title}</option>
-                      ))}
-                    </select>
-                    <svg width="16" height="16" fill="none" stroke="#64748B" strokeWidth="1.5" viewBox="0 0 24 24"
-                      style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                    </svg>
-                  </div>
+                  {loadingWishlists ? (
+                    <div style={{
+                      padding: "12px 14px", borderRadius: 8,
+                      border: "1px solid #E2E8F0", background: "#F8FAFC",
+                      fontSize: 13, color: "#94A3B8",
+                    }}>
+                      Loading your wishlists…
+                    </div>
+                  ) : wishlists.length === 0 ? (
+                    <div style={{
+                      padding: "12px 14px",
+                      borderRadius: 8,
+                      border: "1px dashed #CBD5E1",
+                      background: "#F8FAFC",
+                      fontSize: 13,
+                      color: "#64748B",
+                    }}>
+                      You don't have any wishlists yet.{" "}
+                      <a
+                        href="/wishlists/new"
+                        style={{ color: "#38A3C7", fontWeight: 600, textDecoration: "underline" }}
+                      >
+                        Create one first
+                      </a>
+                      .
+                    </div>
+                  ) : (
+                    <div style={{ position: "relative" }}>
+                      <select
+                        value={wishlistId}
+                        onChange={(e) => setWishlistId(e.target.value)}
+                        style={selectStyle}
+                        required
+                      >
+                        {wishlists.map((w) => (
+                          <option key={w.id} value={w.id}>{w.title}</option>
+                        ))}
+                      </select>
+                      <svg width="16" height="16" fill="none" stroke="#64748B" strokeWidth="1.5" viewBox="0 0 24 24"
+                        style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                      </svg>
+                    </div>
+                  )}
                 </div>
 
                 {/* Name wish */}
@@ -450,7 +508,7 @@ export default function AddWishModal() {
                       <img src={imagePreview} alt="Product" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       <button
                         type="button"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setImageUrl(""); setImagePreview("") }}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setImageUrl(""); setImagePreview(""); setImageInputKey((k) => k + 1) }}
                         style={{
                           position: "absolute", top: 6, right: 6,
                           width: 24, height: 24, borderRadius: "50%",
@@ -474,7 +532,7 @@ export default function AddWishModal() {
                     </>
                   )}
                 </label>
-                <input id="wish-image-upload" type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
+                <input key={imageInputKey} id="wish-image-upload" type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
 
                 {/* Link to product */}
                 <div>

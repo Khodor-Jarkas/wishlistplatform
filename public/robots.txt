@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://wish-it-nine.vercel.app/sitemap.xml

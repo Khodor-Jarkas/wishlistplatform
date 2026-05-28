@@ -130,6 +130,12 @@ img { max-width: 100%; height: auto; }
 
 @media (max-width: 640px) {
   .container, .container-sm, .container-xs { padding-inline: 1rem; }
+  .inspire-hero { padding-top: 40px !important; padding-bottom: 36px !important; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 /* ============================================================
@@ -161,4 +167,355 @@ img { max-width: 100%; height: auto; }
 :focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: 2px;
+}
+
+/* ============================================================
+   Animations — used by modals, drawers, dropdowns
+   ============================================================ */
+
+@keyframes wi-fade-in {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+
+@keyframes wi-scale-in {
+  from { opacity: 0; transform: scale(0.96) translateY(4px) }
+  to   { opacity: 1; transform: scale(1)    translateY(0)   }
+}
+
+@keyframes wi-dropdown-in {
+  from { opacity: 0; transform: translateY(-6px) }
+  to   { opacity: 1; transform: translateY(0)    }
+}
+
+.wi-anim-fade {
+  animation: wi-fade-in 160ms ease-out both;
+}
+
+.wi-anim-modal {
+  animation: wi-scale-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Variant for modals positioned with `transform: translate(-50%, -50%)`
+   for centering — keep the centering translate inside the keyframe so
+   the scale doesn't fight it. */
+@keyframes wi-modal-centered-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(0.96) }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1)                }
+}
+
+.wi-anim-modal-centered {
+  animation: wi-modal-centered-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.wi-anim-dropdown {
+  animation: wi-dropdown-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wi-anim-fade,
+  .wi-anim-modal,
+  .wi-anim-modal-centered,
+  .wi-anim-dropdown {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   MobileBottomNav — always in DOM, visible only on mobile via CSS.
+   Eliminates useIsMobile() hydration mismatch.
+   ============================================================ */
+
+.wi-mobile-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid #E2E8F0;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -1px 8px rgba(0,0,0,0.06);
+}
+
+@media (max-width: 640px) {
+  .wi-mobile-nav {
+    display: flex;
+  }
+}
+
+/* AppHeader — responsive sizing via CSS */
+.wi-app-header-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 80px;
+  gap: 12px;
+  padding: 0 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.wi-app-header-desktop-nav {
+  display: flex;
+}
+
+.wi-app-header-desktop-add {
+  display: flex;
+}
+
+.wi-app-header-mobile-add {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .wi-app-header-inner {
+    height: 64px;
+    padding: 0 16px;
+  }
+  .wi-app-header-desktop-nav {
+    display: none;
+  }
+  .wi-app-header-desktop-add {
+    display: none;
+  }
+  .wi-app-header-mobile-add {
+    display: flex;
+  }
+}
+
+/* Add bottom padding on mobile to account for bottom nav */
+@media (max-width: 640px) {
+  .wi-app-content {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ============================================================
+   Public Header (Header.tsx) — responsive without useIsMobile
+   ============================================================ */
+
+.wi-header-hamburger { display: none; }
+.wi-header-desktop-nav { display: flex; }
+.wi-header-desktop-add { display: flex; }
+.wi-header-mobile-add  { display: none; }
+.wi-header-wordmark    { display: inline; }
+
+@media (max-width: 640px) {
+  .wi-header-hamburger   { display: flex; }
+  .wi-header-desktop-nav { display: none; }
+  .wi-header-desktop-add { display: none; }
+  .wi-header-mobile-add  { display: flex; }
+  /* Hide wordmark when logged in on mobile — saves space */
+  .wi-header-wordmark-auth { display: none; }
+}
+
+/* ============================================================
+   HowItWorks section — responsive without useIsMobile
+   ============================================================ */
+
+.wi-hiw-section {
+  padding: 100px 0 80px;
+  background: white;
+}
+
+.wi-hiw-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.wi-hiw-header {
+  text-align: center;
+  margin-bottom: 80px;
+}
+
+.wi-hiw-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 100px;
+}
+
+.wi-hiw-step {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+
+.wi-hiw-step-reverse {
+  direction: rtl;
+}
+
+.wi-hiw-step-reverse > * {
+  direction: ltr;
+}
+
+@media (max-width: 900px) {
+  .wi-hiw-step {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .wi-hiw-step-reverse {
+    direction: ltr;
+  }
+}
+
+@media (max-width: 640px) {
+  .wi-hiw-section {
+    padding: 64px 0 48px;
+  }
+  .wi-hiw-inner {
+    padding: 0 20px;
+  }
+  .wi-hiw-header {
+    margin-bottom: 48px;
+  }
+  .wi-hiw-steps {
+    gap: 56px;
+  }
+}
+
+/* ============================================================
+   Hero — responsive layout via CSS (replaces JS media-query hooks)
+   ============================================================ */
+
+.wi-hero {
+  background: linear-gradient(135deg, #1E8FAD 0%, #38A3C7 50%, #4DBBD6 100%);
+  min-height: 92vh;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.wi-hero-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 80px 32px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+  width: 100%;
+  position: relative;
+}
+
+.wi-hero-copy {
+  color: white;
+  text-align: left;
+}
+
+.wi-hero-cta-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.wi-hero-stats {
+  display: flex;
+  gap: 40px;
+  margin-top: 56px;
+  padding-top: 32px;
+  border-top: 1px solid rgba(255,255,255,0.2);
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.wi-hero-visual {
+  position: relative;
+  height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* On desktop the description text should be left-aligned */
+.wi-hero-desc {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Tablet breakpoint */
+@media (max-width: 900px) {
+  .wi-hero {
+    min-height: auto;
+  }
+  .wi-hero-inner {
+    grid-template-columns: 1fr;
+    gap: 48px;
+    padding: 80px 32px;
+  }
+  .wi-hero-copy {
+    text-align: center;
+  }
+  .wi-hero-cta-row {
+    justify-content: center;
+  }
+  .wi-hero-stats {
+    justify-content: center;
+  }
+  .wi-hero-visual {
+    height: 420px;
+  }
+}
+
+/* Mobile breakpoint */
+@media (max-width: 640px) {
+  .wi-hero-inner {
+    padding: 56px 20px;
+  }
+  .wi-hero-stats {
+    gap: 20px;
+  }
+  .wi-hero-visual {
+    display: none;
+  }
+}
+
+/* ============================================================
+   AddWishModal — responsive grid (replaces useIsMobile)
+   ============================================================ */
+
+.wi-add-wish-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  padding: 20px 24px 28px;
+}
+
+@media (max-width: 640px) {
+  .wi-add-wish-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 20px 20px 24px;
+  }
+}
+
+/* ============================================================
+   WishlistCard — CSS-driven hover (eliminates JS re-renders)
+   ============================================================ */
+
+.wi-wishlist-card-image {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  transition: box-shadow 0.2s;
+}
+
+.wi-wishlist-card:hover .wi-wishlist-card-image {
+  box-shadow: 0 6px 24px rgba(0,0,0,0.14);
+}
+
+.wi-wishlist-card-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.wi-wishlist-card:hover .wi-wishlist-card-actions {
+  opacity: 1;
+  pointer-events: auto;
 }

@@ -1,16 +1,30 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import dynamic from "next/dynamic"
 import Link from "next/link"
+import { toast } from "sonner"
 import { followWishlist, unfollowWishlist } from "@/lib/actions/wishlists"
 import Container from "@/components/ui/Container"
-import EditWishlistModal from "./EditWishlistModal"
 import DeleteConfirmModal from "./DeleteConfirmModal"
 import WishCard from "./WishCard"
-import EditWishModal from "./EditWishModal"
-import { getInitials, timeAgo } from "@/lib/utils"
+import { getInitials, staticAvatarUrl, timeAgo } from "@/lib/utils"
 import { useAddWishModal } from "@/context/AddWishModalContext"
+import { useAuthModal } from "@/context/AuthModalContext"
 import type { Wishlist, Wish } from "@/types"
+
+// Lazy-load — only fetched when the user clicks Edit (most visitors never do).
+const EditWishlistModal = dynamic(() => import("./EditWishlistModal"), { ssr: false })
+const EditWishModal     = dynamic(() => import("./EditWishModal"),     { ssr: false })
+
+type CollabProfile = {
+  id: string
+  username: string | null
+  first_name: string | null
+  last_name: string | null
+  full_name: string | null
+  avatar_url: string | null
+}
 
 interface WishlistFull extends Wishlist {
   wish_count: number
@@ -31,6 +45,8 @@ interface Props {
   isFollowing: boolean
   currentUserId: string | null
   userWishlists: { id: string; title: string }[]
+  isFriend: boolean
+  collaborators?: CollabProfile[]
 }
 
 export default function WishlistDetail({
@@ -40,15 +56,17 @@ export default function WishlistDetail({
   isFollowing: initialFollowing,
   currentUserId,
   userWishlists,
+  isFriend,
+  collaborators = [],
 }: Props) {
   const [following, setFollowing]   = useState(initialFollowing)
   const [followerCount, setFollowerCount] = useState(wishlist.follower_count)
   const [editWishlistOpen, setEditWishlistOpen] = useState(false)
   const [deleteWishlistOpen, setDeleteWishlistOpen] = useState(false)
   const [editingWish, setEditingWish] = useState<Wish | null>(null)
-  const [copied, setCopied]         = useState(false)
   const [isPending, start]          = useTransition()
   const { open: openAddWish }       = useAddWishModal()
+  const { openLogin }               = useAuthModal()
 
   const owner = wishlist.profiles
   const ownerInitials = getInitials({
@@ -67,16 +85,18 @@ export default function WishlistDetail({
     : null
 
   function handleFollow() {
-    if (!currentUserId) return
+    if (!currentUserId) { openLogin(); return }
     start(async () => {
       if (following) {
         await unfollowWishlist(wishlist.id)
         setFollowing(false)
         setFollowerCount((c) => Math.max(0, c - 1))
+        toast("Unfollowed wishlist")
       } else {
         await followWishlist(wishlist.id)
         setFollowing(true)
         setFollowerCount((c) => c + 1)
+        toast.success("Following wishlist!")
       }
     })
   }
@@ -84,13 +104,12 @@ export default function WishlistDetail({
   function handleShare() {
     const url = `${window.location.origin}/wishlists/${wishlist.id}`
     navigator.clipboard.writeText(url).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      toast.success("Link copied to clipboard!")
     })
   }
 
   return (
-    <main style={{ minHeight: "100vh", background: "#F8FAFC", paddingBottom: 60 }}>
+    <main style={{ minHeight: "100vh", background: "#F8FAFC", paddingBottom: 80 }}>
 
       {/* ── Cover banner ── */}
       <div style={{ height: 240, position: "relative", background: "#CBD5E1" }}>
@@ -108,7 +127,7 @@ export default function WishlistDetail({
       </div>
 
       <Container>
-        <div style={{ maxWidth: 960, margin: "0 auto", paddingTop: 28 }}>
+        <div style={{ maxWidth: 960, margin: "0 auto", paddingTop: "clamp(16px, 3vw, 28px)" }}>
 
           {/* Back link */}
           <Link
@@ -122,8 +141,8 @@ export default function WishlistDetail({
           </Link>
 
           {/* ── Title row ── */}
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0F172A", margin: 0, lineHeight: 1.2 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0F172A", margin: 0, lineHeight: 1.2, flex: "1 1 200px" }}>
               {wishlist.title}
             </h1>
             {isOwner && (
@@ -160,18 +179,56 @@ export default function WishlistDetail({
 
           {/* ── Owner + followers row ── */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-            {/* Left: avatar + name */}
+            {/* Left: creator + collaborators (YouTube-style) */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Creator avatar */}
               <div style={{
                 width: 36, height: 36, borderRadius: "50%", background: "#38A3C7", flexShrink: 0,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 color: "white", fontWeight: 700, fontSize: 13, overflow: "hidden",
               }}>
                 {owner?.avatar_url ? (
-                  <img src={owner.avatar_url} alt={ownerName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src={staticAvatarUrl(owner.avatar_url)!} alt={ownerName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : ownerInitials}
               </div>
-              <span style={{ fontSize: 15, fontWeight: 600, color: "#0F172A" }}>{ownerName}</span>
+
+              {/* Collaborator avatars overlapping */}
+              {collaborators.map((c, i) => {
+                const cInitials = getInitials({ first_name: c.first_name, last_name: c.last_name, full_name: c.full_name, username: c.username })
+                const colors = ["#8B5CF6", "#10B981", "#F59E0B", "#EC4899", "#EF4444"]
+                return (
+                  <div
+                    key={c.id}
+                    style={{
+                      width: 36, height: 36, borderRadius: "50%",
+                      background: colors[i % colors.length], flexShrink: 0,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "white", fontWeight: 700, fontSize: 13, overflow: "hidden",
+                      border: "2px solid white", marginLeft: -10,
+                    }}
+                    title={c.first_name ? `${c.first_name} ${c.last_name ?? ""}`.trim() : c.username ?? "Collaborator"}
+                  >
+                    {c.avatar_url ? (
+                      <img src={staticAvatarUrl(c.avatar_url)!} alt={cInitials} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : cInitials}
+                  </div>
+                )
+              })}
+
+              {/* Name(s) */}
+              <span style={{ fontSize: 15, fontWeight: 600, color: "#0F172A" }}>
+                {ownerName}
+                {collaborators.length > 0 && (
+                  <span style={{ color: "#64748B", fontWeight: 400 }}>
+                    {" "}&amp;{" "}
+                    {collaborators.length === 1
+                      ? (collaborators[0].first_name
+                          ? `${collaborators[0].first_name} ${collaborators[0].last_name ? collaborators[0].last_name[0] + "." : ""}`.trim()
+                          : collaborators[0].username ?? "Collaborator")
+                      : `${collaborators.length} others`}
+                  </span>
+                )}
+              </span>
             </div>
 
             {/* Right: followers + follow/share buttons */}
@@ -180,10 +237,11 @@ export default function WishlistDetail({
                 <strong style={{ color: "#0F172A" }}>{followerCount}</strong> {followerCount === 1 ? "follower" : "followers"}
               </span>
 
-              {!isOwner && currentUserId && (
+              {!isOwner && (
                 <button
                   onClick={handleFollow}
                   disabled={isPending}
+                  title={!currentUserId ? "Sign in to follow this wishlist" : undefined}
                   style={{
                     padding: "7px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
                     border: following ? "1px solid #38A3C7" : "1px solid #E2E8F0",
@@ -202,12 +260,11 @@ export default function WishlistDetail({
                 style={{
                   padding: "7px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
                   border: "1px solid #E2E8F0",
-                  background: copied ? "#DCFCE7" : "white",
-                  color: copied ? "#16A34A" : "#334155",
+                  background: "white", color: "#334155",
                   cursor: "pointer", transition: "all 0.2s",
                 }}
               >
-                {copied ? "✓ Copied!" : "🔗 Share"}
+                🔗 Share
               </button>
             </div>
           </div>
@@ -272,6 +329,7 @@ export default function WishlistDetail({
                     isOwner={isOwner}
                     currentUserId={currentUserId}
                     userWishlists={userWishlists}
+                    isFriend={isFriend}
                     onEditRequest={(w) => setEditingWish(w)}
                   />
                 ))}

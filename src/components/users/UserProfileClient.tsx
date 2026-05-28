@@ -11,7 +11,8 @@ import {
   cancelFriendRequest,
   removeFriend,
 } from "@/lib/actions/friends"
-import { getInitials } from "@/lib/utils"
+import { getInitials, staticAvatarUrl } from "@/lib/utils"
+import { useAuthModal } from "@/context/AuthModalContext"
 import type { Profile } from "@/types"
 import type { WishlistWithCounts } from "@/components/wishlist/WishlistCard"
 
@@ -37,6 +38,7 @@ export default function UserProfileClient({
 }: Props) {
   const [isPending, start] = useTransition()
   const [menuOpen, setMenuOpen] = useState(false)
+  const { openLogin } = useAuthModal()
 
   const displayName = profile.first_name
     ? `${profile.first_name} ${profile.last_name ?? ""}`.trim()
@@ -68,7 +70,7 @@ export default function UserProfileClient({
               color: "white", fontWeight: 700, fontSize: 32,
             }}>
               {profile.avatar_url
-                ? <img src={profile.avatar_url} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ? <img src={staticAvatarUrl(profile.avatar_url)!} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 : initials}
             </div>
 
@@ -85,8 +87,15 @@ export default function UserProfileClient({
               )}
 
               {/* Action buttons */}
-              {!isOwnProfile && currentUserId && (
+              {!isOwnProfile && (
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  {/* Anon visitors see the same Add Friend button — clicking
+                      opens the login modal so the action is discoverable. */}
+                  {!currentUserId && (
+                    <button onClick={openLogin} style={btnStyle("primary")}>
+                      + Add Friend
+                    </button>
+                  )}
                   {isFriend && (
                     <div style={{ position: "relative" }}>
                       <button
@@ -152,13 +161,13 @@ export default function UserProfileClient({
                     </>
                   )}
 
-                  {!friendship && (
+                  {currentUserId && !friendship && (
                     <button
                       onClick={() => start(() => void sendFriendRequest(profile.id))}
                       disabled={isPending}
                       style={btnStyle("primary")}
                     >
-                      {isPending ? "Sending…" : "Add Friend"}
+                      {isPending ? "Sending…" : "+ Add Friend"}
                     </button>
                   )}
                 </div>
