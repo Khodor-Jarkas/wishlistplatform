@@ -189,7 +189,7 @@ src/
 ## Author
 
 **Khodor El Jarkas** — Lebanese International University, Computer Science  
-GitHub: [@Khodor-Jarkas](https://github.com/Khodor-Jarkas)
+GitHub: [@Khodor-Jarkas](https://github.com/Khodor-Jarkas) · LinkedIn: [kjdev](https://www.linkedin.com/in/kjdev/)
 
 ---
 
