@@ -196,3 +196,8 @@ GitHub: [@Khodor-Jarkas](https://github.com/Khodor-Jarkas) · LinkedIn: [kjdev](
 ## License
 
 Released for educational and portfolio purposes. Not licensed for commercial use.
+
+---
+
+
+This is a public version, this is not the actual repository.
